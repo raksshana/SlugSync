@@ -1,0 +1,11 @@
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Virtual Environment
+.venv
+venv
+env/
+
+# Secrets file
+.env
