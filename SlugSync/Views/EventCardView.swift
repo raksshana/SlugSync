@@ -39,7 +39,7 @@ struct EventCardView: View {
                     .cornerRadius(8)
                     .padding(12)
                 
-                // Favorite button
+                // Bookmark button (top right)
                 VStack {
                     HStack {
                         Spacer()
@@ -57,6 +57,7 @@ struct EventCardView: View {
                     }
                     Spacer()
                 }
+                
             }
             
             // Event details
@@ -97,9 +98,23 @@ struct EventCardView: View {
                     .background(Color.gray.opacity(0.3))
                     .padding(.vertical, 5)
                 
-                // View Details link
+                // Bottom buttons
                 HStack {
+                    // Delete button (left side)
+                    Button(action: {
+                        deleteEvent()
+                    }) {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(6)
+                            .background(.thinMaterial)
+                            .cornerRadius(15)
+                    }
+                    
                     Spacer()
+                    
+                    // View Details button (right side)
                     Button(action: {
                         showDetails = true
                     }) {
@@ -116,7 +131,7 @@ struct EventCardView: View {
             }
             .padding()
         }
-        .background(Color.white)
+        .background(Color.white.opacity(0.9))
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
         .onAppear {
@@ -130,6 +145,23 @@ struct EventCardView: View {
     private func toggleFavorite() {
         isFavorite.toggle()
         saveFavoriteStatus()
+    }
+    
+    private func deleteEvent() {
+        Task {
+            do {
+                // Use the string ID directly
+                let eventId = event.id
+                try await EventService.shared.deleteEvent(id: eventId)
+                print("✅ Event deleted successfully")
+                
+                // Notify other views to refresh
+                NotificationCenter.default.post(name: .eventsUpdated, object: nil)
+                
+            } catch {
+                print("❌ Error deleting event: \(error)")
+            }
+        }
     }
     
     private func loadFavoriteStatus() {

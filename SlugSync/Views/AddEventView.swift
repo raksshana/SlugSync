@@ -155,8 +155,7 @@ struct AddEventView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6), // UCSC Blue
-                        Color.white // Pure white at bottom
+                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -166,34 +165,75 @@ struct AddEventView: View {
     }
     
     private func createEvent() {
-        // Format the date based on single or multi-day
-        let formattedDate = formatEventDate()
+        Task {
+            do {
+                // Create API event - simplified for testing
+                let apiEvent = EventIn(
+                    name: eventName,
+                    starts_at: formatISO8601Date(eventStartDate, eventTime),
+                    ends_at: isMultiDay && eventEndDate > eventStartDate ? formatISO8601Date(eventEndDate, eventTime) : nil,
+                    location: location,
+                    description: "Test event from iOS app",
+                    host: organizerName.isEmpty ? "Unknown" : organizerName,
+                    tags: [selectedCategory.lowercased()]
+                )
+                
+                print("📤 Sending event to backend:")
+                print("Name: \(apiEvent.name)")
+                print("Starts at: \(apiEvent.starts_at)")
+                print("Ends at: \(apiEvent.ends_at ?? "nil")")
+                print("Location: \(apiEvent.location)")
+                print("Host: \(apiEvent.host ?? "nil")")
+                print("Tags: \(apiEvent.tags)")
+                print("Is Multi-Day: \(isMultiDay)")
+                print("Start Date: \(eventStartDate)")
+                print("End Date: \(eventEndDate)")
+                
+                // Send to backend
+                let createdEvent = try await EventService.shared.createEvent(apiEvent)
+                print("Event created successfully: \(createdEvent)")
+                
+                // Clear form
+                eventName = ""
+                organizerName = ""
+                location = ""
+                selectedCategory = "Academic"
+                isMultiDay = false
+                isAllDay = false
+                eventStartDate = Date()
+                eventEndDate = Date()
+                eventTime = Date()
+                
+                // Show success message
+                print("✅ Event created and form cleared!")
+                
+                // Notify other views to refresh
+                NotificationCenter.default.post(name: .eventsUpdated, object: nil)
+                
+            } catch {
+                print("Error creating event: \(error)")
+                // TODO: Show error message
+            }
+        }
+    }
+    
+    private func formatISO8601Date(_ date: Date, _ time: Date) -> String {
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
         
-        // Format the time based on all-day or specific time
-        let formattedTime = formatEventTime()
+        var combinedComponents = DateComponents()
+        combinedComponents.year = dateComponents.year
+        combinedComponents.month = dateComponents.month
+        combinedComponents.day = dateComponents.day
+        combinedComponents.hour = timeComponents.hour
+        combinedComponents.minute = timeComponents.minute
         
-        // Get appropriate image for category
-        let imageName = getImageForCategory(selectedCategory)
+        let combinedDate = calendar.date(from: combinedComponents) ?? date
         
-        // Create the new event
-        let newEvent = Event(
-            id: generateEventId(), // Temporary ID until backend assigns real one
-            title: eventName,
-            imageName: imageName,
-            category: selectedCategory,
-            date: formattedDate,
-            time: formattedTime,
-            location: location,
-            clubName: organizerName.isEmpty ? nil : organizerName
-        )
-        
-        // TODO: Send to backend API
-        // For now, just print the event
-        print("Creating event: \(newEvent)")
-        
-        // TODO: Add success/error handling
-        // TODO: Clear form after successful creation
-        // TODO: Navigate back to main view
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: combinedDate)
     }
     
     private func formatEventDate() -> String {

@@ -6,22 +6,20 @@
 //
 
 import SwiftUI
+import Foundation
+
+extension Notification.Name {
+    static let eventsUpdated = Notification.Name("eventsUpdated")
+}
 
 struct ContentView: View {
     @State private var searchText: String = ""
     @State private var selectedCategory: String = "All"
+    @State private var events: [Event] = []
+    @State private var isLoading: Bool = true
+    @StateObject private var eventService = EventService.shared
     
     let categories = ["All", "Sports", "Academic", "Social", "Clubs"]
-    
-    // Mock events data
-    let events: [Event] = [
-        Event(id: 1, title: "SCAI Linear Regression Meeting", imageName: "book", category: "Clubs", date: "Wednesday, Oct 15, 2025", time: "3:00 PM - 4:00 PM", location: "E2-180", clubName: "SCAI"),
-        Event(id: 2, title: "Midterm Study Group", imageName: "book", category: "Academic", date: "Monday, Oct 14, 2025", time: "6:00 PM - 9:00 PM", location: "McHenry Library Room 234", clubName: "CSE Tutoring"),
-        Event(id: 3, title: "Club Fair 2025", imageName: "person.3", category: "Social", date: "Wednesday, Oct 16, 2025", time: "11:00 AM - 3:00 PM", location: "Quarry Plaza", clubName: "Student Life"),
-        Event(id: 4, title: "Soccer Match: UCSC vs Stanford", imageName: "sportscourt", category: "Sports", date: "Friday, Oct 18, 2025", time: "2:00 PM - 4:00 PM", location: "East Field", clubName: "UCSC Athletics"),
-        Event(id: 5, title: "ACM Hacks", imageName: "briefcase", category: "Academic", date: "Friday, Oct 10 - Monday, Oct 13, 2025", time: "10:00 AM - 2:00 PM", location: "Engineering 2 Building", clubName: "Association of Computing Machinery"),
-        Event(id: 6, title: "Music Club Concert", imageName: "music.note", category: "Clubs", date: "Thursday, Oct 24, 2025", time: "7:30 PM - 9:30 PM", location: "Music Center Recital Hall", clubName: "UCSC Music Club")
-    ]
     
     var filteredEvents: [Event] {
         let today = Date()
@@ -107,13 +105,23 @@ struct ContentView: View {
                 .padding(.bottom, 20)
                 
                 // Events List
-                ScrollView {
-                    LazyVStack(spacing: 20) {
-                        ForEach(filteredEvents) { event in
-                            EventCardView(event: event)
-                        }
+                if isLoading {
+                    VStack {
+                        Spacer()
+                        ProgressView("Loading events...")
+                            .font(.headline)
+                        Spacer()
                     }
-                    .padding(.horizontal)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 20) {
+                            ForEach(filteredEvents) { event in
+                                EventCardView(event: event)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .background(Color.clear)
                 }
             }
             .navigationBarHidden(true)
@@ -121,13 +129,49 @@ struct ContentView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6), // UCSC Blue
-                        Color.white // Pure white at bottom
+                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
             )
         }
+        .onAppear {
+            loadEvents()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsUpdated)) { _ in
+            loadEvents()
+        }
     }
+    
+    private func loadEvents() {
+        Task {
+            do {
+                let apiEvents = try await eventService.fetchEvents()
+                await MainActor.run {
+                    // Convert API events to our Event model
+                    self.events = apiEvents.map { apiEvent in
+                        Event(
+                            id: apiEvent.id,
+                            name: apiEvent.name,
+                            location: apiEvent.location,
+                            starts_at: apiEvent.starts_at,
+                            ends_at: apiEvent.ends_at,
+                            host: apiEvent.host,
+                            description: apiEvent.description,
+                            tags: apiEvent.tags,
+                            created_at: apiEvent.created_at
+                        )
+                    }
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+                print("Error loading events: \(error)")
+            }
+        }
+    }
+    
 }

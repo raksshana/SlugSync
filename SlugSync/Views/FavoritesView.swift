@@ -76,7 +76,7 @@ struct FavoritesView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "bookmark")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.black)
                         Text("Nothing Saved Yet")
                             .font(.title2)
                             .fontWeight(.bold)
@@ -97,6 +97,7 @@ struct FavoritesView: View {
                         }
                         .padding(.horizontal)
                     }
+                    .background(Color.clear)
                 }
             }
             .navigationBarHidden(true)
@@ -104,8 +105,7 @@ struct FavoritesView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6), // UCSC Blue
-                        Color.white // Pure white at bottom
+                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
                     ]),
                     startPoint: .top,
                     endPoint: .bottom

@@ -15,6 +15,7 @@
 		02DBA2392E9B285F00E08E35 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DBA2382E9B285F00E08E35 /* MainTabView.swift */; };
 		02DBA23B2E9B34E300E08E35 /* AddEventView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DBA23A2E9B34E300E08E35 /* AddEventView.swift */; };
 		02DBA23D2E9B3C5900E08E35 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DBA23C2E9B3C5900E08E35 /* EventDetailView.swift */; };
+		02DBA2492E9B47D900E08E35 /* EventService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DBA2482E9B47D900E08E35 /* EventService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 		02DBA2382E9B285F00E08E35 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		02DBA23A2E9B34E300E08E35 /* AddEventView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEventView.swift; sourceTree = "<group>"; };
 		02DBA23C2E9B3C5900E08E35 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
+		02DBA2482E9B47D900E08E35 /* EventService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +54,7 @@
 		028BA7032E9AE6BE00B8036A = {
 			isa = PBXGroup;
 			children = (
+				02DBA2472E9B47CE00E08E35 /* Services */,
 				02DBA2332E9B23E500E08E35 /* Extensions */,
 				028BA7202E9AE83300B8036A /* Models */,
 				028BA71D2E9AE7BB00B8036A /* Networking */,
@@ -104,6 +107,14 @@
 				02DBA2352E9B243D00E08E35 /* Color+Extension.swift */,
 			);
 			path = Extensions;
+			sourceTree = "<group>";
+		};
+		02DBA2472E9B47CE00E08E35 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				02DBA2482E9B47D900E08E35 /* EventService.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -187,6 +198,7 @@
 				02DBA23D2E9B3C5900E08E35 /* EventDetailView.swift in Sources */,
 				02DBA2392E9B285F00E08E35 /* MainTabView.swift in Sources */,
 				028BA7122E9AE6BE00B8036A /* ContentView.swift in Sources */,
+				02DBA2492E9B47D900E08E35 /* EventService.swift in Sources */,
 				028BA7242E9B0CD700B8036A /* EventCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

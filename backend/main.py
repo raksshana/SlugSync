@@ -15,6 +15,9 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, echo=False)
 
+# Create database tables
+SQLModel.metadata.create_all(engine)
+
 #necessary attributes of an event: name(str), organizer(str), contact email(str), location(str), date(str), description(str)
 class EventIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=120, description="Event title")
@@ -49,6 +52,18 @@ class EventUpdate(BaseModel):   #everything optional incase something needs to b
     ends_at: Optional[datetime] = None
     description: Optional[str] = None
     tags: Optional[List[str]] = None
+
+# Database model
+class EventModel(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    starts_at: datetime
+    ends_at: Optional[datetime] = None
+    location: str
+    description: Optional[str] = None
+    host: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 #necessary routes for the app: default get for populating the fyp of the app, add_events, remove_events, search bar feature.
 
 
@@ -65,31 +80,48 @@ def list_events(
     start_date: Optional[datetime] = Query(None, description="Find events starting after this date"),
     limit: int = Query(50, ge=1, le=500)
 ):
-    # Start with all events, sorted by start time (most recent first)
-    # Using list() creates a copy so we don't modify the original values
-    results = sorted(list(events_db.values()), key=lambda e: e.starts_at, reverse=True)
-
-    # Apply search query if provided
-    if q:
-        q_lower = q.lower()
-        results = [
-            event for event in results 
-            if q_lower in event.name.lower() or 
-               (event.description and q_lower in event.description.lower()) or
-               q_lower in event.location.lower()
-        ]
-
-    # Apply tag filter if provided
-    if tag:
-        tag_lower = tag.lower()
-        # Ensure tags are compared case-insensitively
-        results = [event for event in results if tag_lower in [t.lower() for t in event.tags]]
-
-    # Apply date filter if provided
-    if start_date:
-        results = [event for event in results if event.starts_at >= start_date]
-
-    return results[:limit]
+    with Session(engine) as session:
+        # Get all events from database
+        statement = select(EventModel)
+        
+        # Apply filters
+        if start_date:
+            statement = statement.where(EventModel.starts_at >= start_date)
+        
+        events = session.exec(statement).all()
+        
+        # Convert to EventOut format
+        results = []
+        for event in events:
+            # Apply search filter if provided
+            if q:
+                q_lower = q.lower()
+                if not (q_lower in event.name.lower() or
+                       q_lower in (event.description or "").lower() or
+                       q_lower in event.location.lower()):
+                    continue
+            
+            # Apply tag filter if provided
+            if tag:
+                tag_lower = tag.lower()
+                if tag_lower not in [t.lower() for t in event.tags]:
+                    continue
+            
+            results.append(EventOut(
+                id=str(event.id),
+                name=event.name,
+                starts_at=event.starts_at,
+                ends_at=event.ends_at,
+                location=event.location,
+                description=event.description,
+                host=event.host,
+                tags=event.tags,
+                created_at=event.created_at
+            ))
+        
+        # Sort by start time (most recent first) and limit
+        results.sort(key=lambda e: e.starts_at, reverse=True)
+        return results[:limit]
 
 
 
@@ -106,13 +138,33 @@ def get_event(event_id : str):
 
 @app.post("/events", response_model = EventOut, status_code = 201)    #create new event
 def create_event(event_db: EventIn):
-    saved = EventOut(
-        **event_db.model_dump(),
-        id=str(uuid4()),                 # server-generated
-        created_at=datetime.utcnow(),    # server-generated
-    )
-    events_db[saved.id] = saved
-    return saved
+    with Session(engine) as session:
+        # Create database record
+        db_event = EventModel(
+            name=event_db.name,
+            starts_at=event_db.starts_at,
+            ends_at=event_db.ends_at,
+            location=event_db.location,
+            description=event_db.description,
+            host=event_db.host,
+            tags=event_db.tags
+        )
+        session.add(db_event)
+        session.commit()
+        session.refresh(db_event)
+        
+        # Convert to EventOut format
+        return EventOut(
+            id=str(db_event.id),
+            name=db_event.name,
+            starts_at=db_event.starts_at,
+            ends_at=db_event.ends_at,
+            location=db_event.location,
+            description=db_event.description,
+            host=db_event.host,
+            tags=db_event.tags,
+            created_at=db_event.created_at
+        )
 
 
 
@@ -140,7 +192,23 @@ def update_event(event_id : str, event_update: EventUpdate):
 
 @app.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_event(event_id: str):
-    if event_id not in events_db:
-        raise HTTPException(status_code = 404, detail= "Event not found")
-    del events_db[event_id]
+    with Session(engine) as session:
+        # Find the event in database - handle both string and int IDs
+        try:
+            # Try to convert to int first (for database IDs)
+            event_id_int = int(event_id)
+            statement = select(EventModel).where(EventModel.id == event_id_int)
+        except ValueError:
+            # If conversion fails, treat as string ID (for UUIDs)
+            statement = select(EventModel).where(EventModel.id == event_id)
+        
+        event = session.exec(statement).first()
+        
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        # Delete the event
+        session.delete(event)
+        session.commit()
+    
     return
