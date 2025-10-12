@@ -144,24 +144,3 @@ def remove_event(event_id: str):
         raise HTTPException(status_code = 404, detail= "Event not found")
     del events_db[event_id]
     return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# (Your models go here)
-
-# --- DATABASE (IN-MEMORY) ---
-# --- API ENDPOINTS ---
-
