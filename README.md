@@ -53,7 +53,7 @@ The FastAPI backend and database are deployed on Render, a cloud platform that h
 - Club reps can log in through a special portal to post new events.
 
 
-# App Flow
+# App Work Flow
 
 SlugSync App Workflow
 1. User Opens the App (Frontend – Swift)
