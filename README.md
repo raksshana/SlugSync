@@ -131,3 +131,8 @@ The FastAPI backend and SQL database are hosted on Render.
 This keeps the API accessible 24/7 so that the Swift app can always fetch or update event data.
 
 When users interact with the app, all communication happens securely over HTTPS.
+
+# Future Improvements 
+
+The first and most important feature that we want to add is user authentication. This will allows us to secure the app and improve the quality for all users. 
+Next, we want to add an end_time variable, which would allow us to choose end times for events, giving the end user even more detail. We want to give the event hosts the ability to add more information, like a description or images. 
