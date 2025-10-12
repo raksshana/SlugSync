@@ -9,3 +9,5 @@ As we briefly stated above, some major effects caused by this problem are missin
 The target audience of our app is UCSC students. SlugSync is specifically designed for UCSC events to be posted on it for UCSC students to attend. 
 
 Students would use SlugSync because of the easy-to-use UI/UX that we have, leading them to remember all of the events since they're all in one spot, which also reduces the amount of time students spend scrolling through multiple Instagram accounts. Through SlugSync, students can also find new clubs/events that they never knew about, since all of the events happening will be in one centralized spot. 
+
+# Tech Stack
