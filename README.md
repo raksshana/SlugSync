@@ -13,7 +13,7 @@ Students would use SlugSync because of the easy-to-use UI/UX that we have, leadi
 # Tech Stack
 
 Frontend – Swift (iOS App):
-The app’s user interface is built using Swift, Apple’s programming language for iOS development. It handles everything users see and interact with — like buttons, event listings, and swiping features. Swift provides a smooth, fast, and native experience on iPhones and iPads.
+We used Swift to build the IOS app, and it handles everything users see and interact with like buttons, event listings, and swiping features. By using Swift, we were able to make the app on IOS and make sure the users have a clear and easy-to-use interface.
 
 Backend – FastAPI (Python):
 The backend is powered by FastAPI, a modern and high-performance web framework for Python. It processes requests from the app, such as logging in users, fetching event data, and storing user preferences. FastAPI is known for being fast, easy to scale, and great for building APIs that communicate with mobile apps.
@@ -23,3 +23,19 @@ All the app’s data — like user accounts, events, and preferences — is stor
 
 Deployment – Render:
 The FastAPI backend and database are deployed on Render, a cloud platform that hosts web apps and APIs. Render keeps the backend running online 24/7, so the iOS app can connect to it anytime. It automatically manages scaling, updates, and uptime.
+
+
+# Features 
+
+List and briefly describe what users can do in the app.
+Example:
+
+Event Feed: Browse upcoming UCSC club events in one centralized feed.
+
+Search & Filters: Find events by date, category, or club.
+
+Favorites: Save events you’re interested in.
+
+Club Submissions: Club reps can upload their own events directly through the app.
+
+Map Integration: View where events are happening across campus.
