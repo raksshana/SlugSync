@@ -1,5 +1,4 @@
 # SlugSync
-An app to track events on the UCSC campus for ACM Hacks
 
 What is the problem we're solving?
 
