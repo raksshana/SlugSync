@@ -1,11 +1,9 @@
-# Python temporary files
+# Virtual Environment
+.venv
+
+# Python cache
 __pycache__/
 *.pyc
 
-# Virtual Environment
-.venv
-venv
-env/
-
-# Secrets file
+# Environment variables (secrets!)
 .env
