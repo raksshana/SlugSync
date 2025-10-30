@@ -1,0 +1,120 @@
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import EventCard from "../components/EventCard";
+import SearchAndFilter from "../components/SearchAndFilter";
+import { Loader2, Calendar } from "lucide-react";
+
+export default function Feed() {
+  const [user, setUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const queryClient = useQueryClient();
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const currentUser = await base44.auth.me();
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // Fetch all events
+  const { data: events, isLoading } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => base44.entities.Event.list('-date'),
+    initialData: [],
+  });
+
+  // Filter events based on search and categories
+  const filteredEvents = events.filter(event => {
+    const matchesSearch = searchQuery === "" || 
+      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.organizer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.location?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesCategory = selectedCategories.length === 0 || 
+      selectedCategories.includes(event.category);
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Save/unsave event mutation
+  const saveMutation = useMutation({
+    mutationFn: async (eventId) => {
+      const savedEvents = user?.saved_events || [];
+      const isSaved = savedEvents.includes(eventId);
+      
+      const newSavedEvents = isSaved
+        ? savedEvents.filter(id => id !== eventId)
+        : [...savedEvents, eventId];
+
+      await base44.auth.updateMe({ saved_events: newSavedEvents });
+      return newSavedEvents;
+    },
+    onSuccess: (newSavedEvents) => {
+      setUser(prev => ({ ...prev, saved_events: newSavedEvents }));
+      queryClient.invalidateQueries({ queryKey: ['savedEvents'] });
+    },
+  });
+
+  const handleSaveToggle = async (eventId) => {
+    if (!user) {
+      await base44.auth.redirectToLogin();
+      return;
+    }
+    await saveMutation.mutateAsync(eventId);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <SearchAndFilter
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedCategories={selectedCategories}
+        setSelectedCategories={setSelectedCategories}
+      />
+
+      <div className="pb-6">
+        {filteredEvents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <Calendar className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {events.length === 0 ? "No events yet" : "No matching events"}
+            </h3>
+            <p className="text-gray-500 text-center">
+              {events.length === 0 
+                ? "Check back soon for upcoming UCSC events!"
+                : "Try adjusting your search or filters"}
+            </p>
+          </div>
+        ) : (
+          filteredEvents.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              isSaved={user?.saved_events?.includes(event.id)}
+              onSaveToggle={handleSaveToggle}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
