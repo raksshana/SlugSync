@@ -1,0 +1,110 @@
+import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Bookmark, MapPin, Clock, Users, BookmarkCheck } from "lucide-react";
+import { format } from "date-fns";
+import { motion } from "framer-motion";
+
+const categoryColors = {
+  academic: "bg-purple-100 text-purple-700 border-purple-200",
+  sports: "bg-green-100 text-green-700 border-green-200",
+  social: "bg-pink-100 text-pink-700 border-pink-200",
+  cultural: "bg-orange-100 text-orange-700 border-orange-200",
+  career: "bg-blue-100 text-blue-700 border-blue-200",
+  workshop: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  other: "bg-gray-100 text-gray-700 border-gray-200"
+};
+
+export default function EventCard({ event, isSaved, onSaveToggle }) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSaveToggle = async () => {
+    setIsLoading(true);
+    await onSaveToggle(event.id);
+    setIsLoading(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="border-b border-gray-200 rounded-none hover:bg-gray-50 transition-colors">
+        <div className="p-4">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                {event.organizer && (
+                  <span className="text-sm font-semibold text-gray-900">
+                    {event.organizer}
+                  </span>
+                )}
+                {event.category && (
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs ${categoryColors[event.category]} border`}
+                  >
+                    {event.category}
+                  </Badge>
+                )}
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">
+                {event.title}
+              </h3>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSaveToggle}
+              disabled={isLoading}
+              className={`ml-2 ${isSaved ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-600`}
+            >
+              {isSaved ? (
+                <BookmarkCheck className="w-5 h-5 fill-current" />
+              ) : (
+                <Bookmark className="w-5 h-5" />
+              )}
+            </Button>
+          </div>
+
+          {/* Description */}
+          <p className="text-gray-700 mb-3 whitespace-pre-wrap">
+            {event.description}
+          </p>
+
+          {/* Image */}
+          {event.image_url && (
+            <div className="mb-3 rounded-xl overflow-hidden border border-gray-200">
+              <img
+                src={event.image_url}
+                alt={event.title}
+                className="w-full h-64 object-cover"
+              />
+            </div>
+          )}
+
+          {/* Event Details */}
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
+              <span>
+                {format(new Date(event.date), "MMM d, yyyy")}
+                {event.time && ` • ${event.time}`}
+              </span>
+            </div>
+            {event.location && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4" />
+                <span>{event.location}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
