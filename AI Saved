@@ -1,0 +1,88 @@
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import EventCard from "../components/EventCard";
+import { Loader2, Bookmark } from "lucide-react";
+
+export default function Saved() {
+  const [user, setUser] = useState(null);
+  const queryClient = useQueryClient();
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const currentUser = await base44.auth.me();
+        setUser(currentUser);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // Fetch all events
+  const { data: allEvents, isLoading } = useQuery({
+    queryKey: ['savedEvents'],
+    queryFn: () => base44.entities.Event.list('-date'),
+    initialData: [],
+  });
+
+  // Filter saved events
+  const savedEvents = allEvents.filter(event => 
+    user?.saved_events?.includes(event.id)
+  );
+
+  // Unsave event mutation
+  const unsaveMutation = useMutation({
+    mutationFn: async (eventId) => {
+      const savedEvents = user?.saved_events || [];
+      const newSavedEvents = savedEvents.filter(id => id !== eventId);
+      await base44.auth.updateMe({ saved_events: newSavedEvents });
+      return newSavedEvents;
+    },
+    onSuccess: (newSavedEvents) => {
+      setUser(prev => ({ ...prev, saved_events: newSavedEvents }));
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+  });
+
+  const handleSaveToggle = async (eventId) => {
+    await unsaveMutation.mutateAsync(eventId);
+  };
+
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (savedEvents.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <Bookmark className="w-8 h-8 text-gray-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">No saved events</h3>
+        <p className="text-gray-500 text-center">
+          Events you bookmark will appear here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-6">
+      {savedEvents.map((event) => (
+        <EventCard
+          key={event.id}
+          event={event}
+          isSaved={true}
+          onSaveToggle={handleSaveToggle}
+        />
+      ))}
+    </div>
+  );
+}
