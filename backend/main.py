@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field, model_validator, EmailStr
 from dotenv import load_dotenv
 import os
-import jwt # From python-jose library
-from python_jose import JWTError
+from jose import jwt, JWTError
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
