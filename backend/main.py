@@ -40,19 +40,24 @@ class UserBase(SQLModel):
     email: EmailStr = Field(index=True, unique=True)
 
 class UserCreate(UserBase):
+    name: str = Field(..., min_length=1, max_length=100, description="User full name")
     password: str
     is_host: bool = Field(default=False) # Field to determine if user is a host
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True) # Fixed syntax
+    name: str = Field(..., min_length=1, max_length=100)
     hashed_password: str
     is_host: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     # Corrected relationship to point to "EventModel"
     events: List["EventModel"] = Relationship(back_populates="owner")
 
 class UserRead(UserBase):
     id: int
+    name: str
     is_host: bool # Show role in API response
+    created_at: datetime
 
 # --- 5. Event Models ---
 # Database Table Model (Cleaned: no API validation here)
@@ -169,6 +174,7 @@ def register_user(user_data: UserCreate, session: Session = Depends(get_session)
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         email=user_data.email,
+        name=user_data.name,
         hashed_password=hashed_password,
         is_host=user_data.is_host # Correctly sets the user's role
     )
@@ -176,6 +182,12 @@ def register_user(user_data: UserCreate, session: Session = Depends(get_session)
     session.commit()
     session.refresh(db_user)
     return db_user
+
+# Alternative registration endpoint for compatibility with frontend
+@app.post("/users/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register_user_alt(user_data: UserCreate, session: Session = Depends(get_session)):
+    """Alternative registration endpoint that matches frontend expectations"""
+    return register_user(user_data, session)
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
