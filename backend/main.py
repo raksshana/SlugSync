@@ -35,20 +35,27 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 # --- 4. User Models ---
-class UserBase(SQLModel):
-    email: EmailStr = Field(index=True, unique=True)
+# --- 4. User Models ---
 
+# This base model is for API VALIDATION
+class UserBase(SQLModel):
+    email: EmailStr = Field(index=True, unique=True) # Use EmailStr for API validation
+
+# This model is for API INPUT (Registration)
 class UserCreate(UserBase):
     password: str
-    is_host: bool = Field(default=False) # Field to determine if user is a host
+    is_host: bool = False # Field to determine if user is a host
 
-class User(UserBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True) # Fixed syntax
+# This is the DATABASE TABLE model
+# It does NOT inherit from UserBase to avoid the EmailStr problem
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(index=True, unique=True) # Use a simple str for DB storage
     hashed_password: str
     is_host: bool = Field(default=False)
-    # Corrected relationship to point to "EventModel"
     events: List["EventModel"] = Relationship(back_populates="owner")
 
+# This is the API OUTPUT model
 class UserRead(UserBase):
     id: int
     is_host: bool # Show role in API response
