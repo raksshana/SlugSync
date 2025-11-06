@@ -20,7 +20,7 @@ app = FastAPI(title="SlugSync API")
 engine = create_engine(DATABASE_URL, echo=False)
 
 # --- 2. Security Setup ---
-SECRET_KEY = os.getenv("SECRET_KEY", "a_very_secret_key_please_change_in_env")
+SECRET_KEY = os.getenv("SECRET_KEY", "lkasdjkjfadskljflpraneethkajf8923983")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
 
