@@ -1,214 +1,303 @@
-from fastapi import FastAPI, HTTPException, Query, status
-from typing import List, Optional, Dict
-from datetime import datetime
+from fastapi import FastAPI, HTTPException, Query, status, Depends
+from typing import List, Optional
+from datetime import datetime, timedelta
 from pydantic import BaseModel, Field, model_validator, EmailStr
-from uuid import uuid4
-import os
 from dotenv import load_dotenv
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+import os
+import jwt # From python-jose library
+from python_jose import JWTError
+from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
+from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
-
-
-
-app = FastAPI()
+# --- 1. App & DB Setup ---
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL not found in .env file")
+
+app = FastAPI(title="SlugSync API")
 engine = create_engine(DATABASE_URL, echo=False)
 
-# Create database tables
-SQLModel.metadata.create_all(engine)
+# --- 2. Security Setup ---
+SECRET_KEY = os.getenv("SECRET_KEY", "a_very_secret_key_please_change_in_env")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
 
-#necessary attributes of an event: name(str), organizer(str), contact email(str), location(str), date(str), description(str)
-class EventIn(BaseModel):
-    name: str = Field(..., min_length=1, max_length=120, description="Event title")
-    starts_at: datetime = Field(..., description="Start time (ISO 8601, e.g. 2025-10-15T15:00:00-07:00)")
-    ends_at: Optional[datetime] = Field(None, description="End time (ISO 8601)")
-    location: str = Field(..., min_length=1, max_length=160, description="Where the event happens")
-    description: str = Field(None, max_length=10000)
-    host: str = Field(None, max_length=300)
-    tags: List[str] = Field(default_factory=list, description="Freeform labels like ['career','tech']")
-    
-    
-    #checks if datetimes are valid
-    @model_validator(mode="after")
-    def check_times(self):
-        # This method runs AFTER Pydantic has parsed & type-checked all fields.
-        if self.ends_at and self.ends_at <= self.starts_at:
-            # Raising ValueError signals a validation failure for the whole model.
-            raise ValueError("ends_at must be after starts_at")
-        return self  # Must return the (possibly modified) model instance
-    #could add a bunch of optional stuff i'll work it out later
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-class EventOut(EventIn):
-    id: str
-    created_at: datetime
+# --- 3. Security Models ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
-class EventUpdate(BaseModel):   #everything optional incase something needs to be updated
-    name: Optional[str] = None
-    organizer: Optional[str] = None
-    contact_email: Optional[EmailStr] = None
-    location: Optional[str] = None
-    starts_at: Optional[datetime] = None
-    ends_at: Optional[datetime] = None
-    description: Optional[str] = None
-    tags: Optional[List[str]] = None
+class TokenData(BaseModel):
+    email: Optional[str] = None
 
-# Database model
+# --- 4. User Models ---
+class UserBase(SQLModel):
+    email: EmailStr = Field(index=True, unique=True)
+
+class UserCreate(UserBase):
+    password: str
+    is_host: bool = Field(default=False) # Field to determine if user is a host
+
+class User(UserBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True) # Fixed syntax
+    hashed_password: str
+    is_host: bool = Field(default=False)
+    # Corrected relationship to point to "EventModel"
+    events: List["EventModel"] = Relationship(back_populates="owner")
+
+class UserRead(UserBase):
+    id: int
+    is_host: bool # Show role in API response
+
+# --- 5. Event Models ---
+# Database Table Model (Cleaned: no API validation here)
 class EventModel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    starts_at: datetime
+    location: str
+    ends_at: Optional[datetime] = Field(default=None)
+    description: Optional[str] = Field(default=None)
+    host: Optional[str] = Field(default=None) # Display name of host
+    tags: Optional[str] = Field(default=None) # Stored as comma-separated string
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id", nullable=True, index=True)
+    owner: Optional[User] = Relationship(back_populates="events") # Link back to User
+
+# API Input Model for creating
+class EventIn(SQLModel):
+    name: str = Field(..., min_length=1, max_length=120, description="Event title")
+    starts_at: datetime = Field(..., description="Start time (ISO 8601)")
+    ends_at: Optional[datetime] = Field(None, description="End time (ISO 8601)")
+    location: str = Field(..., min_length=1, max_length=160, description="Where the event happens")
+    description: Optional[str] = Field(None, max_length=10000)
+    host: Optional[str] = Field(None, max_length=300)
+    tags: Optional[str] = Field(default=None, description="Comma-separated tags e.g. 'career,tech'")
+
+    @model_validator(mode="after")
+    def check_times(self):
+        if self.ends_at and self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        return self
+
+# API Output Model
+class EventOut(SQLModel):
+    id: int
     name: str
     starts_at: datetime
-    ends_at: Optional[datetime] = None
     location: str
+    ends_at: Optional[datetime] = None
     description: Optional[str] = None
     host: Optional[str] = None
-    tags: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-#necessary routes for the app: default get for populating the fyp of the app, add_events, remove_events, search bar feature.
+    tags: Optional[str] = None
+    created_at: datetime
+    owner_id: Optional[int] = None
 
+# API Update Model
+class EventUpdate(SQLModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    location: Optional[str] = Field(None, min_length=1, max_length=160)
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    description: Optional[str] = Field(None, max_length=10000)
+    host: Optional[str] = Field(None, max_length=300)
+    tags: Optional[str] = Field(None) # Corrected type to Optional[str]
 
-events_db: Dict[str, EventOut] = {}
+# --- 6. Database Setup ---
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
 
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
-#__________________________________________________________GET__________________________________________________________________________________________
+# Dependency to get a database session
+def get_session():
+    with Session(engine) as session:
+        yield session
 
-#default view that just gets all the events and displays them
-@app.get("/events", response_model=List[EventOut])
+# --- 7. Auth Utility Functions ---
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# --- 8. Auth Dependency ---
+async def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+    
+    user = session.exec(select(User).where(User.email == token_data.email)).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# --- 9. Auth Endpoints ---
+@app.post("/users/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register_user(user_data: UserCreate, session: Session = Depends(get_session)):
+    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    hashed_password = get_password_hash(user_data.password)
+    db_user = User(
+        email=user_data.email,
+        hashed_password=hashed_password,
+        is_host=user_data.is_host # Correctly sets the user's role
+    )
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+    return db_user
+
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+    user = session.exec(select(User).where(User.email == form_data.username)).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# --- 10. Event Endpoints ---
+
+# GET endpoints remain unprotected
+@app.get("/events/", response_model=List[EventOut])
 def list_events(
-    q: Optional[str] = Query(None, min_length=3, description="Search term for name, description, location"),
-    tag: Optional[str] = Query(None, description="Filter by a specific tag"),
-    start_date: Optional[datetime] = Query(None, description="Find events starting after this date"),
+    session: Session = Depends(get_session),
+    q: Optional[str] = Query(None, min_length=3),
+    tag: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500)
 ):
-    with Session(engine) as session:
-        # Get all events from database
-        statement = select(EventModel)
-        
-        # Apply filters
-        if start_date:
-            statement = statement.where(EventModel.starts_at >= start_date)
-        
-        events = session.exec(statement).all()
-        
-        # Convert to EventOut format
-        results = []
-        for event in events:
-            # Apply search filter if provided
-            if q:
-                q_lower = q.lower()
-                if not (q_lower in event.name.lower() or
-                       q_lower in (event.description or "").lower() or
-                       q_lower in event.location.lower()):
-                    continue
-            
-            # Apply tag filter if provided
-            if tag:
-                tag_lower = tag.lower()
-                if tag_lower not in [t.lower() for t in event.tags]:
-                    continue
-            
-            results.append(EventOut(
-                id=str(event.id),
-                name=event.name,
-                starts_at=event.starts_at,
-                ends_at=event.ends_at,
-                location=event.location,
-                description=event.description,
-                host=event.host,
-                tags=event.tags,
-                created_at=event.created_at
-            ))
-        
-        # Sort by start time (most recent first) and limit
-        results.sort(key=lambda e: e.starts_at, reverse=True)
-        return results[:limit]
+    statement = select(EventModel)
+    if start_date:
+        statement = statement.where(EventModel.starts_at >= start_date)
+    
+    results = session.exec(statement).all()
+    
+    filtered_results = []
+    for event in results:
+        if q:
+            q_lower = q.lower()
+            if not (q_lower in event.name.lower() or
+                    q_lower in (event.description or "").lower() or
+                    q_lower in event.location.lower()):
+                continue
+        if tag:
+            tag_lower = tag.lower()
+            # Assumes tags is a comma-separated string
+            event_tags = [t.strip().lower() for t in (event.tags or "").split(',') if t.strip()]
+            if tag_lower not in event_tags:
+                continue
+        filtered_results.append(event)
+    
+    filtered_results.sort(key=lambda e: e.starts_at, reverse=True)
+    
+    # Convert EventModel to EventOut
+    return [EventOut.model_validate(ev) for ev in filtered_results[:limit]]
 
-
-
-#When user clicks on certain event, event details will be pulled with unique event_id
-@app.get("/events/{event_id}", response_model = EventOut)
-def get_event(event_id : str):
-    if event_id not in events_db:
-        raise HTTPException(status_code = 404, detail= "Event not found")
-    return events_db[event_id]
-
-
-
-#____________________________________________________________POST__________________________________________________________________________________________
-
-@app.post("/events", response_model = EventOut, status_code = 201)    #create new event
-def create_event(event_db: EventIn):
-    with Session(engine) as session:
-        # Create database record
-        db_event = EventModel(
-            name=event_db.name,
-            starts_at=event_db.starts_at,
-            ends_at=event_db.ends_at,
-            location=event_db.location,
-            description=event_db.description,
-            host=event_db.host,
-            tags=event_db.tags
-        )
-        session.add(db_event)
-        session.commit()
-        session.refresh(db_event)
-        
-        # Convert to EventOut format
-        return EventOut(
-            id=str(db_event.id),
-            name=db_event.name,
-            starts_at=db_event.starts_at,
-            ends_at=db_event.ends_at,
-            location=db_event.location,
-            description=db_event.description,
-            host=db_event.host,
-            tags=db_event.tags,
-            created_at=db_event.created_at
-        )
-
-
-
-#update event
-@app.post("/events/{event_id}", response_model = EventOut)
-def update_event(event_id : str, event_update: EventUpdate):
-    if event_id not in events_db:
+@app.get("/events/{event_id}", response_model=EventOut)
+def get_event(event_id: int, session: Session = Depends(get_session)):
+    event = session.get(EventModel, event_id)
+    if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    # Get the existing event data
-    stored_event = events_db[event_id]
-    
-    # Create a dictionary from the stored event Pydantic model
-    update_data = event_update.model_dump(exclude_unset=True)  #Pydantic Model, event_update, is converted into a python dictionary with .model_dump. Exclude_unset includes only the fields sent by the client
-    
-    # Update the stored model with the new data
-    updated_event = stored_event.model_copy(update=update_data)
-    try:
-        validated_event = EventOut(**updated_event.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-        
-    events_db[event_id] = validated_event
-    return validated_event
-#_______________________________________________________DELETE__________________________________________________________________________________________
+    return event # Automatic conversion by FastAPI
 
-@app.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_event(event_id: str):
-    with Session(engine) as session:
-        # Find the event in database - handle both string and int IDs
-        try:
-            # Try to convert to int first (for database IDs)
-            event_id_int = int(event_id)
-            statement = select(EventModel).where(EventModel.id == event_id_int)
-        except ValueError:
-            # If conversion fails, treat as string ID (for UUIDs)
-            statement = select(EventModel).where(EventModel.id == event_id)
-        
-        event = session.exec(statement).first()
-        
-        if not event:
-            raise HTTPException(status_code=404, detail="Event not found")
-        
-        # Delete the event
-        session.delete(event)
-        session.commit()
+# POST /events/ requires login AND user must be a host
+@app.post("/events/", response_model=EventOut, status_code=status.HTTP_201_CREATED)
+def create_event(
+    event_data: EventIn,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user.is_host:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only event hosts can create events.")
     
-    return
+    # model_validate creates a new EventModel from the EventIn data
+    # and adds the owner_id from the current_user
+    db_event = EventModel.model_validate(event_data, update={"owner_id": current_user.id})
+    session.add(db_event)
+    session.commit()
+    session.refresh(db_event)
+    # Return an EventOut model
+    return EventOut.model_validate(db_event)
+
+# PATCH /events/{event_id} requires login and ownership
+@app.patch("/events/{event_id}", response_model=EventOut)
+def update_event(
+    event_id: int,
+    event_update: EventUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    db_event = session.get(EventModel, event_id)
+    if not db_event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # --- AUTHORIZATION: Check ownership ---
+    if db_event.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to modify this event")
+
+    update_data = event_update.model_dump(exclude_unset=True)
+    
+    # Update the db_event object with new data
+    db_event.sqlmodel_update(update_data)
+    
+    session.add(db_event)
+    session.commit()
+    session.refresh(db_event)
+    return EventOut.model_validate(db_event)
+
+# DELETE /events/{event_id} requires login and ownership
+@app.delete("/events/{event_id}", status_code=status.HTTP_200_OK)
+def delete_event(
+    event_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    event = session.get(EventModel, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # --- AUTHORIZATION: Check ownership ---
+    if event.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this event")
+
+    session.delete(event)
+    session.commit()
+    # Return a success message instead of nothing
+    return {"message": "Event deleted successfully"}
