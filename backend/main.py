@@ -4,8 +4,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field, model_validator, EmailStr
 from dotenv import load_dotenv
 import os
-import jwt # From python-jose library
-from python_jose import JWTError
+from jose import jwt, JWTError
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -36,16 +35,21 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 # --- 4. User Models ---
+# This base model is for API VALIDATION
 class UserBase(SQLModel):
-    email: EmailStr = Field(index=True, unique=True)
+    email: EmailStr = Field(index=True, unique=True) # Use EmailStr for API validation
 
+# This model is for API INPUT (Registration)
 class UserCreate(UserBase):
     name: str = Field(..., min_length=1, max_length=100, description="User full name")
     password: str
     is_host: bool = Field(default=False) # Field to determine if user is a host
 
-class User(UserBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True) # Fixed syntax
+# This is the DATABASE TABLE model
+# It does NOT inherit from UserBase to avoid the EmailStr problem
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(index=True, unique=True) # Use a simple str for DB storage
     name: str = Field(..., min_length=1, max_length=100)
     hashed_password: str
     is_host: bool = Field(default=False)
@@ -53,6 +57,7 @@ class User(UserBase, table=True):
     # Corrected relationship to point to "EventModel"
     events: List["EventModel"] = Relationship(back_populates="owner")
 
+# This is the API OUTPUT model
 class UserRead(UserBase):
     id: int
     name: str
