@@ -168,26 +168,39 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
     return user
 
 # --- 9. Auth Endpoints ---
-@app.post("/users/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@app.post("/users/", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["users"])
 def register_user(user_data: UserCreate, session: Session = Depends(get_session)):
-    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    try:
+        existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+            
+        hashed_password = get_password_hash(user_data.password)
+        db_user = User(
+            email=user_data.email,
+            name=user_data.name,
+            hashed_password=hashed_password,
+            is_host=user_data.is_host # Correctly sets the user's role
+        )
+        session.add(db_user)
+        session.commit()
+        session.refresh(db_user)
         
-    hashed_password = get_password_hash(user_data.password)
-    db_user = User(
-        email=user_data.email,
-        name=user_data.name,
-        hashed_password=hashed_password,
-        is_host=user_data.is_host # Correctly sets the user's role
-    )
-    session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-    return db_user
+        # Convert to UserRead response model
+        return UserRead(
+            id=db_user.id,
+            email=db_user.email,
+            name=db_user.name,
+            is_host=db_user.is_host,
+            created_at=db_user.created_at
+        )
+    except Exception as e:
+        session.rollback()
+        print(f"Error registering user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Alternative registration endpoint for compatibility with frontend
-@app.post("/users/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@app.post("/users/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["users"])
 def register_user_alt(user_data: UserCreate, session: Session = Depends(get_session)):
     """Alternative registration endpoint that matches frontend expectations"""
     return register_user(user_data, session)
@@ -206,6 +219,18 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+# Get current user info (for after login)
+@app.get("/users/me", response_model=UserRead, tags=["users"])
+def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get the current logged-in user's information"""
+    return UserRead(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        is_host=current_user.is_host,
+        created_at=current_user.created_at
+    )
 
 # --- 10. Event Endpoints ---
 
