@@ -40,52 +40,57 @@ class UserBase(SQLModel):
     email: EmailStr = Field(index=True, unique=True)
     name: str = Field(min_length=1, max_length=100)
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    email: EmailStr
+    name: str
     password: str
-    is_host: bool = Field(default=False)
+    is_host: bool = False
+
+
 
 # Database table - use plain str for email to avoid SQLModel/Pydantic conflicts
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(index=True, unique=True)  # str in database
-    name: str = Field(max_length=100)
+    email: str = Field(unique=True, index=True)
+    name: str
     hashed_password: str
     is_host: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    events: List["EventModel"] = Relationship(back_populates="owner")
+
 
 # API Output - this should work with both EmailStr validation and str from DB
-class UserRead(SQLModel):  # Don't inherit from UserBase
+class UserRead(BaseModel):
     id: int
-    email: str  # Use str to match database
+    email: str
     name: str
     is_host: bool
     created_at: datetime
+
 
 # --- 5. Event Models ---
 # Database Table Model (Cleaned: no API validation here)
 class EventModel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
+    name: str
     starts_at: datetime
     location: str
-    ends_at: Optional[datetime] = Field(default=None)
-    description: Optional[str] = Field(default=None)
-    host: Optional[str] = Field(default=None) # Display name of host
-    tags: Optional[str] = Field(default=None) # Stored as comma-separated string
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    owner_id: Optional[int] = Field(default=None, foreign_key="user.id", nullable=True, index=True)
-    owner: Optional[User] = Relationship(back_populates="events") # Link back to User
+    ends_at: Optional[datetime]
+    description: Optional[str]
+    host: Optional[str]
+    tags: Optional[str]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    owner: Optional[User] = Relationship(back_populates="events")
 
 # API Input Model for creating
-class EventIn(SQLModel):
-    name: str = Field(..., min_length=1, max_length=120, description="Event title")
-    starts_at: datetime = Field(..., description="Start time (ISO 8601)")
-    ends_at: Optional[datetime] = Field(None, description="End time (ISO 8601)")
-    location: str = Field(..., min_length=1, max_length=160, description="Where the event happens")
-    description: Optional[str] = Field(None, max_length=10000)
-    host: Optional[str] = Field(None, max_length=300)
-    tags: Optional[str] = Field(default=None, description="Comma-separated tags e.g. 'career,tech'")
+class EventIn(BaseModel):
+    name: str
+    starts_at: datetime
+    ends_at: Optional[datetime]
+    location: str
+    description: Optional[str]
+    host: Optional[str]
+    tags: Optional[str]
 
     @model_validator(mode="after")
     def check_times(self):
@@ -94,17 +99,18 @@ class EventIn(SQLModel):
         return self
 
 # API Output Model
-class EventOut(SQLModel):
+class EventOut(BaseModel):
     id: int
     name: str
     starts_at: datetime
     location: str
-    ends_at: Optional[datetime] = None
-    description: Optional[str] = None
-    host: Optional[str] = None
-    tags: Optional[str] = None
+    ends_at: Optional[datetime]
+    description: Optional[str]
+    host: Optional[str]
+    tags: Optional[str]
     created_at: datetime
-    owner_id: Optional[int] = None
+    owner_id: Optional[int]
+
 
 # API Update Model
 class EventUpdate(SQLModel):
