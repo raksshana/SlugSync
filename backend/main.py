@@ -36,33 +36,30 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 # --- 4. User Models ---
-# This base model is for API VALIDATION
 class UserBase(SQLModel):
-    email: EmailStr = Field(index=True, unique=True) # Use EmailStr for API validation
+    email: EmailStr = Field(index=True, unique=True)
+    name: str = Field(min_length=1, max_length=100)
 
-# This model is for API INPUT (Registration)
 class UserCreate(UserBase):
-    name: str = Field(..., min_length=1, max_length=100, description="User full name")
     password: str
-    is_host: bool = Field(default=False) # Field to determine if user is a host
+    is_host: bool = Field(default=False)
 
-# This is the DATABASE TABLE model
-# It does NOT inherit from UserBase to avoid the EmailStr problem
+# Database table - use plain str for email to avoid SQLModel/Pydantic conflicts
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(index=True, unique=True) # Use a simple str for DB storage
-    name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(index=True, unique=True)  # str in database
+    name: str = Field(max_length=100)
     hashed_password: str
     is_host: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    # Corrected relationship to point to "EventModel"
     events: List["EventModel"] = Relationship(back_populates="owner")
 
-# This is the API OUTPUT model
-class UserRead(UserBase):
+# API Output - this should work with both EmailStr validation and str from DB
+class UserRead(SQLModel):  # Don't inherit from UserBase
     id: int
+    email: str  # Use str to match database
     name: str
-    is_host: bool # Show role in API response
+    is_host: bool
     created_at: datetime
 
 # --- 5. Event Models ---
