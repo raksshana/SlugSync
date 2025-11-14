@@ -39,6 +39,8 @@ The FastAPI backend and database are deployed on Render, a cloud platform that h
 - Map Integration: View where events are happening across campus.
 
 
+Link To API Documentation Page: https://slugsync-1.onrender.com/docs?
+
 # User Flow 
 
 
