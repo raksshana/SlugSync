@@ -14,7 +14,9 @@ struct LoginView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var isLoading: Bool = false
+    @State private var isGoogleLoading: Bool = false
     @State private var errorMessage: String = ""
+    private let googleSignInService = GoogleSignInService.shared
     
     var body: some View {
         NavigationView {
@@ -99,6 +101,47 @@ struct LoginView: View {
                         .disabled(isLoading || !isFormValid)
                         .opacity(isFormValid && !isLoading ? 1.0 : 0.6)
                         
+                        // Divider
+                        HStack {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.3))
+                                .frame(height: 1)
+                            Text("OR")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.horizontal, 10)
+                            Rectangle()
+                                .fill(Color.white.opacity(0.3))
+                                .frame(height: 1)
+                        }
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 20)
+                        
+                        // Google Sign-In Button
+                        Button(action: {
+                            signInWithGoogle()
+                        }) {
+                            HStack {
+                                if isGoogleLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Image(systemName: "globe")
+                                        .font(.title3)
+                                    Text("Sign in with Google")
+                                        .font(.headline)
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(10)
+                        }
+                        .padding(.horizontal, 30)
+                        .disabled(isGoogleLoading || isLoading)
+                        .opacity(isGoogleLoading || isLoading ? 0.6 : 1.0)
+                        
                         Spacer()
                     }
                     .padding(.bottom, 40)
@@ -141,6 +184,32 @@ struct LoginView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func signInWithGoogle() {
+        isGoogleLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                // Get Google ID token
+                let idToken = try await googleSignInService.signIn()
+                
+                // Login with Google token (if UserService has this method)
+                // For now, we'll need to add this to UserService
+                _ = try await userService.loginWithGoogle(idToken: idToken)
+                
+                await MainActor.run {
+                    isGoogleLoading = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isGoogleLoading = false
                     errorMessage = error.localizedDescription
                 }
             }

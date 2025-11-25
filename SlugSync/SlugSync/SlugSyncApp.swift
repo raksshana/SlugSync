@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct SlugSyncApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .onOpenURL { url in
+                    // Handle Google Sign-In URL callback
+                    GIDSignIn.sharedInstance.handle(url)
+                }
         }
     }
 }

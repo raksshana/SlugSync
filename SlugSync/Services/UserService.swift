@@ -328,6 +328,61 @@ class UserService: ObservableObject {
         }
     }
     
+    // MARK: - Google Login
+    func loginWithGoogle(idToken: String) async throws -> UserOut {
+        guard let url = URL(string: "\(baseURL)/auth/google") else {
+            throw NetworkError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        
+        struct GoogleTokenRequest: Codable {
+            let id_token: String
+        }
+        
+        let requestBody = GoogleTokenRequest(id_token: idToken)
+        let jsonData = try JSONEncoder().encode(requestBody)
+        request.httpBody = jsonData
+        
+        print("🌐 Attempting Google login at: \(url)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        
+        let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+        print("📥 Google login response status: \(httpResponse.statusCode)")
+        print("📥 Response body: \(responseString)")
+        
+        if httpResponse.statusCode == 200 {
+            // Backend returns Token (access_token and token_type)
+            struct TokenResponse: Codable {
+                let access_token: String
+                let token_type: String
+            }
+            
+            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+            
+            // Store the token
+            self.accessToken = tokenResponse.access_token
+            print("✅ Token stored, fetching user info...")
+            
+            // Now fetch user info using the token
+            return try await fetchCurrentUser()
+        } else {
+            if let errorData = try? JSONDecoder().decode([String: String].self, from: data),
+               let detail = errorData["detail"] {
+                throw NSError(domain: "UserService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
+            }
+            throw NSError(domain: "UserService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Google login failed: \(responseString)"])
+        }
+    }
+    
     func logout() {
         currentUser = nil
         accessToken = nil

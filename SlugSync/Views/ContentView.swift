@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var selectedCategory: String = "All"
     @State private var events: [Event] = []
     @State private var isLoading: Bool = true
+    @State private var showProfile: Bool = false
     @StateObject private var eventService = EventService.shared
     
     let categories = ["All", "Sports", "Academic", "Social", "Clubs"]
@@ -66,6 +67,13 @@ struct ContentView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4)) // Navy blue
                     Spacer()
+                    Button(action: {
+                        showProfile = true
+                    }) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4))
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 20)
@@ -141,6 +149,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsUpdated)) { _ in
             loadEvents()
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView()
         }
     }
     
