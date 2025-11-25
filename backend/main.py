@@ -14,14 +14,12 @@ import httpx
 # --- 1. App & DB Setup ---
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://slugsync-1.onrender.com/auth/google/callback")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")  # iOS OAuth Client ID
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL not found in .env file")
-if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-    raise RuntimeError("Google OAuth credentials not found in .env file")
+if not GOOGLE_CLIENT_ID:
+    raise RuntimeError("GOOGLE_CLIENT_ID not found in .env file")
 
 app = FastAPI(title="SlugSync API")
 engine = create_engine(DATABASE_URL, echo=False)
@@ -40,6 +38,9 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
 
 # --- 4. User Models ---
 class UserBase(SQLModel):
@@ -174,103 +175,19 @@ async def get_current_user(
         raise credentials_exception
     return user
 
-# --- 9. Google OAuth Endpoints ---
-@app.get("/auth/google/login")
-async def google_login():
-    """Initiate Google OAuth login"""
-    google_auth_url = (
-        "https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={GOOGLE_CLIENT_ID}&"
-        f"redirect_uri={GOOGLE_REDIRECT_URI}&"
-        "response_type=code&"
-        "scope=openid email profile&"
-        "access_type=offline&"
-        "prompt=consent"
-    )
-    return RedirectResponse(url=google_auth_url)
-
-@app.get("/auth/google/callback")
-async def google_callback(code: str, session: Session = Depends(get_session)):
-    """Handle Google OAuth callback"""
-    
-    # Exchange authorization code for access token
-    token_url = "https://oauth2.googleapis.com/token"
-    token_data = {
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }
-    
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(token_url, data=token_data)
-        token_json = token_response.json()
-        
-        if "error" in token_json:
-            raise HTTPException(status_code=400, detail=token_json["error"])
-        
-        access_token = token_json.get("access_token")
-        
-        # Get user info from Google
-        userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
-        headers = {"Authorization": f"Bearer {access_token}"}
-        userinfo_response = await client.get(userinfo_url, headers=headers)
-        user_info = userinfo_response.json()
-    
-    email = user_info.get("email")
-    google_id = user_info.get("id")
-    name = user_info.get("name", email.split("@")[0])
-    
-    # Verify UCSC email
-    if not verify_ucsc_email(email):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only @ucsc.edu emails are allowed to access SlugSync"
-        )
-    
-    # Check if user exists, if not create them
-    user = session.exec(select(User).where(User.email == email)).first()
-    
-    if not user:
-        # Create new user
-        user = User(
-            email=email,
-            name=name,
-            google_id=google_id,
-            is_host=False
-        )
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-    else:
-        # Update google_id if it wasn't set
-        if not user.google_id:
-            user.google_id = google_id
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-    
-    # Create JWT token for our app
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    jwt_token = create_access_token(
-        data={"sub": user.email}, 
-        expires_delta=access_token_expires
-    )
-    
-    # Redirect to frontend with token
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    return RedirectResponse(url=f"{frontend_url}/auth/callback?token={jwt_token}")
-
-@app.post("/token", response_model=Token)
-async def create_token_from_google(google_token: str, session: Session = Depends(get_session)):
+# --- 9. Auth Endpoint for iOS ---
+@app.post("/auth/google", response_model=Token, tags=["auth"])
+async def authenticate_with_google(
+    auth_request: GoogleAuthRequest,
+    session: Session = Depends(get_session)
+):
     """
-    Alternative endpoint: Accept Google ID token directly from frontend
-    This is useful if you want to handle OAuth on the frontend
+    Accept Google ID token from iOS app, verify it, and return JWT token.
+    iOS app uses Google Sign-In SDK to get the ID token, then sends it here.
     """
     async with httpx.AsyncClient() as client:
-        # Verify Google token
-        verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={google_token}"
+        # Verify Google ID token
+        verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={auth_request.id_token}"
         response = await client.get(verify_url)
         
         if response.status_code != 200:
@@ -281,15 +198,22 @@ async def create_token_from_google(google_token: str, session: Session = Depends
         
         user_info = response.json()
         
+        # Verify the token is for our app
+        if user_info.get("aud") != GOOGLE_CLIENT_ID:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token was not issued for this application"
+            )
+        
         email = user_info.get("email")
         google_id = user_info.get("sub")
-        name = user_info.get("name", email.split("@")[0])
+        name = user_info.get("name", email.split("@")[0] if email else "User")
         
         # Verify UCSC email
         if not verify_ucsc_email(email):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only @ucsc.edu emails are allowed"
+                detail="Only @ucsc.edu emails are allowed to access SlugSync"
             )
         
         # Get or create user
@@ -305,6 +229,13 @@ async def create_token_from_google(google_token: str, session: Session = Depends
             session.add(user)
             session.commit()
             session.refresh(user)
+        else:
+            # Update google_id if it wasn't set
+            if not user.google_id:
+                user.google_id = google_id
+                session.add(user)
+                session.commit()
+                session.refresh(user)
         
         # Create our JWT token
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -333,7 +264,7 @@ async def update_host_status(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    """Allow users to become event hosts"""
+    """Allow users to toggle their event host status"""
     current_user.is_host = is_host
     session.add(current_user)
     session.commit()
@@ -348,7 +279,7 @@ async def update_host_status(
     )
 
 # --- 11. Event Endpoints ---
-@app.get("/events/", response_model=List[EventOut])
+@app.get("/events/", response_model=List[EventOut], tags=["events"])
 def list_events(
     session: Session = Depends(get_session),
     q: Optional[str] = Query(None, min_length=3),
@@ -356,6 +287,7 @@ def list_events(
     start_date: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500)
 ):
+    """List all events with optional filtering"""
     statement = select(EventModel)
     if start_date:
         statement = statement.where(EventModel.starts_at >= start_date)
@@ -381,23 +313,25 @@ def list_events(
     
     return [EventOut.model_validate(ev) for ev in filtered_results[:limit]]
 
-@app.get("/events/{event_id}", response_model=EventOut)
+@app.get("/events/{event_id}", response_model=EventOut, tags=["events"])
 def get_event(event_id: int, session: Session = Depends(get_session)):
+    """Get a specific event by ID"""
     event = session.get(EventModel, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     return event
 
-@app.post("/events/", response_model=EventOut, status_code=status.HTTP_201_CREATED)
+@app.post("/events/", response_model=EventOut, status_code=status.HTTP_201_CREATED, tags=["events"])
 def create_event(
     event_data: EventIn,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    """Create a new event (requires host status)"""
     if not current_user.is_host:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Only event hosts can create events."
+            detail="Only event hosts can create events. Update your profile to become a host."
         )
     
     db_event = EventModel.model_validate(event_data, update={"owner_id": current_user.id})
@@ -406,13 +340,14 @@ def create_event(
     session.refresh(db_event)
     return EventOut.model_validate(db_event)
 
-@app.patch("/events/{event_id}", response_model=EventOut)
+@app.patch("/events/{event_id}", response_model=EventOut, tags=["events"])
 def update_event(
     event_id: int,
     event_update: EventUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    """Update an existing event (requires ownership)"""
     db_event = session.get(EventModel, event_id)
     if not db_event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -431,12 +366,13 @@ def update_event(
     session.refresh(db_event)
     return EventOut.model_validate(db_event)
 
-@app.delete("/events/{event_id}", status_code=status.HTTP_200_OK)
+@app.delete("/events/{event_id}", status_code=status.HTTP_200_OK, tags=["events"])
 def delete_event(
     event_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    """Delete an event (requires ownership)"""
     event = session.get(EventModel, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -452,6 +388,11 @@ def delete_event(
     return {"message": "Event deleted successfully"}
 
 # --- 12. Health Check ---
-@app.get("/")
+@app.get("/", tags=["health"])
 def health_check():
-    return {"status": "healthy", "message": "SlugSync API is running"}
+    """Health check endpoint"""
+    return {
+        "status": "healthy", 
+        "message": "SlugSync API is running",
+        "version": "1.0.0"
+    }
