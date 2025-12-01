@@ -55,7 +55,7 @@ class UserService: ObservableObject {
         }
     }
     
-    private var accessToken: String? {
+    var accessToken: String? {
         get {
             UserDefaults.standard.string(forKey: tokenDefaultsKey)
         }
@@ -311,6 +311,7 @@ class UserService: ObservableObject {
         
         let responseString = String(data: data, encoding: .utf8) ?? "No response body"
         print("📥 User info response status: \(httpResponse.statusCode)")
+        print("📥 User info response body: \(responseString)")
         
         if httpResponse.statusCode == 200 {
             let user = try JSONDecoder().decode(UserOut.self, from: data)
@@ -320,6 +321,7 @@ class UserService: ObservableObject {
             print("✅ User info fetched and stored")
             return user
         } else {
+            print("❌ Failed to fetch user info. Status: \(httpResponse.statusCode), Response: \(responseString)")
             if let errorData = try? JSONDecoder().decode([String: String].self, from: data),
                let detail = errorData["detail"] {
                 throw NSError(domain: "UserService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
@@ -375,10 +377,14 @@ class UserService: ObservableObject {
             // Now fetch user info using the token
             return try await fetchCurrentUser()
         } else {
+            // Try to get detailed error message
             if let errorData = try? JSONDecoder().decode([String: String].self, from: data),
                let detail = errorData["detail"] {
+                print("❌ Google login error detail: \(detail)")
                 throw NSError(domain: "UserService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
             }
+            // If no detail, show full response
+            print("❌ Google login failed. Full response: \(responseString)")
             throw NSError(domain: "UserService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Google login failed: \(responseString)"])
         }
     }

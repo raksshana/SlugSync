@@ -239,27 +239,19 @@ async def authenticate_with_google(
                     session.add(user)
                     session.commit()
                     session.refresh(user)
-                # If user exists, just use them (no need to update google_id for now)
+                    print(f"✅ Created new user: {user.email}")
+                else:
+                    print(f"✅ Found existing user: {user.email}")
             except Exception as db_error:
                 session.rollback()
-                print(f"Database error in Google auth: {str(db_error)}")
+                error_msg = str(db_error)
+                print(f"❌ Database error in Google auth: {error_msg}")
                 import traceback
                 traceback.print_exc()
-                # Try to continue anyway - maybe it's just the google_id column
-                # Check if we can at least get/create the user
-                try:
-                    user = session.exec(select(User).where(User.email == email)).first()
-                    if not user:
-                        # Last resort: create user without google_id
-                        user = User(email=email, name=name, is_host=False)
-                        session.add(user)
-                        session.commit()
-                        session.refresh(user)
-                except Exception as final_error:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Database error: {str(db_error)}"
-                    )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database error: {error_msg}. Please check backend logs."
+                )
             
             # Create our JWT token
             access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -275,10 +267,10 @@ async def authenticate_with_google(
         print(f"Error in Google authentication: {str(e)}")
         import traceback
         traceback.print_exc()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {str(e)}"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 # --- 9.5. Migration Endpoint (TEMPORARY - Remove after running once) ---
 @app.post("/migrate/add-google-id", tags=["migration"])
