@@ -58,6 +58,7 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     name: str
+    hashed_password: Optional[str] = Field(default=None)  # Optional for Google OAuth users
     # google_id is optional - will be added via migration if needed
     # google_id: Optional[str] = Field(default=None, unique=True, index=True)
     is_host: bool = Field(default=False)
@@ -230,10 +231,11 @@ async def authenticate_with_google(
                 user = session.exec(select(User).where(User.email == email)).first()
                 
                 if not user:
-                    # Create new user (without google_id for now)
+                    # Create new user (without password for Google OAuth users)
                     user = User(
                         email=email,
                         name=name,
+                        hashed_password=None,  # Google users don't have passwords
                         is_host=False
                     )
                     session.add(user)
@@ -272,32 +274,47 @@ async def authenticate_with_google(
             detail=f"Internal server error: {str(e)}"
         )
 
-# --- 9.5. Migration Endpoint (TEMPORARY - Remove after running once) ---
-@app.post("/migrate/add-google-id", tags=["migration"])
-def migrate_add_google_id():
+# --- 9.5. Migration Endpoints (TEMPORARY - Remove after running once) ---
+@app.post("/migrate/fix-database", tags=["migration"])
+def migrate_fix_database():
     """
-    TEMPORARY: Add google_id column to users table.
+    TEMPORARY: Fix database schema for Google OAuth support.
+    - Makes hashed_password nullable
+    - Adds google_id column if it doesn't exist
     Run this once, then remove this endpoint.
-    Call: POST https://your-backend.onrender.com/migrate/add-google-id
+    Call: POST https://your-backend.onrender.com/migrate/fix-database
     """
     try:
         with engine.connect() as conn:
-            # Check if column already exists
-            result = conn.execute(text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='user' AND column_name='google_id'
-            """))
+            results = []
             
-            if result.fetchone():
-                return {"status": "success", "message": "google_id column already exists"}
+            # 1. Make hashed_password nullable
+            try:
+                conn.execute(text('ALTER TABLE "user" ALTER COLUMN hashed_password DROP NOT NULL'))
+                conn.commit()
+                results.append("✅ Made hashed_password nullable")
+            except Exception as e:
+                results.append(f"⚠️ hashed_password: {str(e)}")
             
-            # Add the column
-            conn.execute(text('ALTER TABLE "user" ADD COLUMN google_id VARCHAR(255)'))
-            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_user_google_id ON "user"(google_id)'))
-            conn.commit()
+            # 2. Add google_id column if it doesn't exist
+            try:
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='user' AND column_name='google_id'
+                """))
+                
+                if not result.fetchone():
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN google_id VARCHAR(255)'))
+                    conn.execute(text('CREATE INDEX IF NOT EXISTS ix_user_google_id ON "user"(google_id)'))
+                    conn.commit()
+                    results.append("✅ Added google_id column")
+                else:
+                    results.append("✅ google_id column already exists")
+            except Exception as e:
+                results.append(f"⚠️ google_id: {str(e)}")
             
-            return {"status": "success", "message": "google_id column added successfully"}
+            return {"status": "success", "messages": results}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
