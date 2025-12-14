@@ -52,7 +52,7 @@ class UserBase(SQLModel):
 class UserCreate(BaseModel):
     email: EmailStr
     name: str
-    is_host: bool = False
+    is_host: bool = True
 
 # Database table
 class User(SQLModel, table=True):
