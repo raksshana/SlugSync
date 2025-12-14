@@ -8,6 +8,7 @@ import os
 from jose import jwt
 from jose.exceptions import JWTError
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
+from sqlalchemy import text
 from fastapi.security import OAuth2PasswordBearer
 import httpx
 
@@ -58,7 +59,9 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     name: str
-    google_id: Optional[str] = Field(default=None, unique=True, index=True)
+    hashed_password: Optional[str] = Field(default=None)  # Optional for Google OAuth users
+    # google_id is optional - will be added via migration if needed
+    # google_id: Optional[str] = Field(default=None, unique=True, index=True)
     is_host: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     events: List["EventModel"] = Relationship(back_populates="owner")
@@ -195,66 +198,135 @@ async def authenticate_with_google(
     Accept Google ID token from iOS app, verify it, and return JWT token.
     iOS app uses Google Sign-In SDK to get the ID token, then sends it here.
     """
-    async with httpx.AsyncClient() as client:
-        # Verify Google ID token
-        verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={auth_request.id_token}"
-        response = await client.get(verify_url)
-        
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Google token"
+    try:
+        async with httpx.AsyncClient() as client:
+            # Verify Google ID token
+            verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={auth_request.id_token}"
+            response = await client.get(verify_url)
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid Google token"
+                )
+            
+            user_info = response.json()
+            
+            # Verify the token is for our app
+            if user_info.get("aud") != GOOGLE_CLIENT_ID:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token was not issued for this application"
+                )
+            
+            email = user_info.get("email")
+            google_id = user_info.get("sub")
+            name = user_info.get("name", email.split("@")[0] if email else "User")
+            
+            if not email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email not provided by Google"
+                )
+            
+            # Verify UCSC email
+            if not verify_ucsc_email(email):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only @ucsc.edu emails are allowed to access SlugSync"
+                )
+            
+            # Get or create user
+            try:
+                user = session.exec(select(User).where(User.email == email)).first()
+                
+                if not user:
+                    # Create new user (without password for Google OAuth users)
+                    user = User(
+                        email=email,
+                        name=name,
+                        hashed_password=None,  # Google users don't have passwords
+                        is_host=False
+                    )
+                    session.add(user)
+                    session.commit()
+                    session.refresh(user)
+                    print(f"✅ Created new user: {user.email}")
+                else:
+                    print(f"✅ Found existing user: {user.email}")
+            except Exception as db_error:
+                session.rollback()
+                error_msg = str(db_error)
+                print(f"❌ Database error in Google auth: {error_msg}")
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database error: {error_msg}. Please check backend logs."
+                )
+            
+            # Create our JWT token
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token = create_access_token(
+                data={"sub": user.email}, 
+                expires_delta=access_token_expires
             )
-        
-        user_info = response.json()
-        
-        # Verify the token is for our app
-        if user_info.get("aud") != GOOGLE_CLIENT_ID:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token was not issued for this application"
-            )
-        
-        email = user_info.get("email")
-        google_id = user_info.get("sub")
-        name = user_info.get("name", email.split("@")[0] if email else "User")
-        
-        # Verify UCSC email
-        if not verify_ucsc_email(email):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only @ucsc.edu emails are allowed to access SlugSync"
-            )
-        
-        # Get or create user
-        user = session.exec(select(User).where(User.email == email)).first()
-        
-        if not user:
-            user = User(
-                email=email,
-                name=name,
-                google_id=google_id,
-                is_host=False
-            )
-            session.add(user)
-            session.commit()
-            session.refresh(user)
-        else:
-            # Update google_id if it wasn't set
-            if not user.google_id:
-                user.google_id = google_id
-                session.add(user)
-                session.commit()
-                session.refresh(user)
-        
-        # Create our JWT token
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user.email}, 
-            expires_delta=access_token_expires
+            
+            return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in Google authentication: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
         )
-        
-        return {"access_token": access_token, "token_type": "bearer"}
+
+# --- 9.5. Migration Endpoints (TEMPORARY - Remove after running once) ---
+@app.post("/migrate/fix-database", tags=["migration"])
+def migrate_fix_database():
+    """
+    TEMPORARY: Fix database schema for Google OAuth support.
+    - Makes hashed_password nullable
+    - Adds google_id column if it doesn't exist
+    Run this once, then remove this endpoint.
+    Call: POST https://your-backend.onrender.com/migrate/fix-database
+    """
+    try:
+        with engine.connect() as conn:
+            results = []
+            
+            # 1. Make hashed_password nullable
+            try:
+                conn.execute(text('ALTER TABLE "user" ALTER COLUMN hashed_password DROP NOT NULL'))
+                conn.commit()
+                results.append("✅ Made hashed_password nullable")
+            except Exception as e:
+                results.append(f"⚠️ hashed_password: {str(e)}")
+            
+            # 2. Add google_id column if it doesn't exist
+            try:
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='user' AND column_name='google_id'
+                """))
+                
+                if not result.fetchone():
+                    conn.execute(text('ALTER TABLE "user" ADD COLUMN google_id VARCHAR(255)'))
+                    conn.execute(text('CREATE INDEX IF NOT EXISTS ix_user_google_id ON "user"(google_id)'))
+                    conn.commit()
+                    results.append("✅ Added google_id column")
+                else:
+                    results.append("✅ google_id column already exists")
+            except Exception as e:
+                results.append(f"⚠️ google_id: {str(e)}")
+            
+            return {"status": "success", "messages": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # --- 10. User Endpoints ---
 @app.get("/users/me", response_model=UserRead, tags=["users"])
