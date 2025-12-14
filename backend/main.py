@@ -257,14 +257,21 @@ async def authenticate_with_google(
                         email=email,
                         name=name,
                         hashed_password=None,  # Google users don't have passwords
-                        is_host=False
+                        is_host=True
                     )
                     session.add(user)
                     session.commit()
                     session.refresh(user)
-                    print(f"✅ Created new user: {user.email}")
+                    print(f"✅ Created new user: {user.email} (is_host=True)")
                 else:
-                    print(f"✅ Found existing user: {user.email}")
+                    if not user.is_host:
+                        user.is_host = True
+                        session.add(user)
+                        session.commit()
+                        session.refresh(user)
+                        print(f"✅ Updated existing user to host: {user.email}")
+                    else:
+                        print(f"✅ Found existing user: {user.email}")
             except Exception as db_error:
                 session.rollback()
                 error_msg = str(db_error)
