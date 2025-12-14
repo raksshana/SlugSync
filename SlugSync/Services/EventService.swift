@@ -12,7 +12,7 @@ import Combine
 struct EventIn: Codable {
     let name: String
     let starts_at: String // ISO 8601 format
-    let ends_at: String // Always required (backend needs it, even if same as starts_at)
+    let ends_at: String? // Always required (backend needs it, even if same as starts_at)
     let location: String
     let description: String?
     let host: String?
@@ -20,15 +20,16 @@ struct EventIn: Codable {
 }
 
 struct EventOut: Codable, Identifiable {
-    let id: String
+    let id: Int
     let name: String
     let starts_at: String
     let ends_at: String?
     let location: String
     let description: String?
     let host: String?
-    let tags: [String]
+    let tags: String?
     let created_at: String
+    let owner_id: Int?
 }
 
 // MARK: - EventService
@@ -119,7 +120,7 @@ class EventService: ObservableObject {
     }
     
     // MARK: - Get Single Event
-    func getEvent(id: String) async throws -> EventOut {
+    func getEvent(id: Int) async throws -> EventOut {
         guard let url = URL(string: "\(baseURL)/events/\(id)") else {
             throw NetworkError.invalidURL
         }
@@ -136,7 +137,7 @@ class EventService: ObservableObject {
     }
     
     // MARK: - Update Event
-    func updateEvent(id: String, event: EventIn) async throws -> EventOut {
+    func updateEvent(id: Int, event: EventIn) async throws -> EventOut {
         guard let url = URL(string: "\(baseURL)/events/\(id)") else {
             throw NetworkError.invalidURL
         }
@@ -166,7 +167,7 @@ class EventService: ObservableObject {
     }
     
     // MARK: - Delete Event
-    func deleteEvent(id: String) async throws {
+    func deleteEvent(id: Int) async throws {
         guard let url = URL(string: "\(baseURL)/events/\(id)") else {
             throw NetworkError.invalidURL
         }
