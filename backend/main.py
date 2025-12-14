@@ -15,6 +15,7 @@ import httpx
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")  # iOS OAuth Client ID
+ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").split(",")  # Comma-separated admin emails
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL not found in .env file")
@@ -149,7 +150,7 @@ def verify_ucsc_email(email: str) -> bool:
 
 # --- 8. Auth Dependency ---
 async def get_current_user(
-    token: str = Depends(oauth2_scheme), 
+    token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session)
 ) -> User:
     credentials_exception = HTTPException(
@@ -157,10 +158,10 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     if not token:
         raise credentials_exception
-    
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -169,11 +170,20 @@ async def get_current_user(
         token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
-    
+
     user = session.exec(select(User).where(User.email == token_data.email)).first()
     if user is None:
         raise credentials_exception
     return user
+
+async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Verify that the current user is an admin"""
+    if current_user.email not in ADMIN_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
 
 # --- 9. Auth Endpoint for iOS ---
 @app.post("/auth/google", response_model=Token, tags=["auth"])
@@ -258,27 +268,91 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         created_at=current_user.created_at
     )
 
-@app.patch("/users/me/host-status", response_model=UserRead, tags=["users"])
-async def update_host_status(
-    is_host: bool,
-    current_user: User = Depends(get_current_user),
+# REMOVED: Self-service host status endpoint
+# Users can no longer make themselves hosts
+# Admin approval is now required via /admin/users/{user_id}/approve-host
+
+# --- 11. Admin Endpoints ---
+@app.get("/admin/users", response_model=List[UserRead], tags=["admin"])
+async def list_all_users(
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    is_host: Optional[bool] = Query(None, description="Filter by host status")
+):
+    """List all users (admin only)"""
+    statement = select(User)
+    if is_host is not None:
+        statement = statement.where(User.is_host == is_host)
+    users = session.exec(statement).all()
+    return [UserRead(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        is_host=user.is_host,
+        created_at=user.created_at
+    ) for user in users]
+
+@app.patch("/admin/users/{user_id}/approve-host", response_model=UserRead, tags=["admin"])
+async def approve_host_status(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
     session: Session = Depends(get_session)
 ):
-    """Allow users to toggle their event host status"""
-    current_user.is_host = is_host
-    session.add(current_user)
+    """Approve a user to become an event host (admin only)"""
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already a host"
+        )
+
+    user.is_host = True
+    session.add(user)
     session.commit()
-    session.refresh(current_user)
-    
+    session.refresh(user)
+
     return UserRead(
-        id=current_user.id,
-        email=current_user.email,
-        name=current_user.name,
-        is_host=current_user.is_host,
-        created_at=current_user.created_at
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        is_host=user.is_host,
+        created_at=user.created_at
     )
 
-# --- 11. Event Endpoints ---
+@app.patch("/admin/users/{user_id}/revoke-host", response_model=UserRead, tags=["admin"])
+async def revoke_host_status(
+    user_id: int,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    """Revoke a user's event host status (admin only)"""
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_host:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not a host"
+        )
+
+    user.is_host = False
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        is_host=user.is_host,
+        created_at=user.created_at
+    )
+
+# --- 12. Event Endpoints ---
 @app.get("/events/", response_model=List[EventOut], tags=["events"])
 def list_events(
     session: Session = Depends(get_session),
