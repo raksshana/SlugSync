@@ -168,14 +168,28 @@ struct AddEventView: View {
         Task {
             do {
                 // Create API event - simplified for testing
+                // Convert tags array to comma-separated string for backend
+                let tagsString = selectedCategory.lowercased()
+                
+                // Always include ends_at - if not provided, use starts_at + 1 hour
+                let startDateString = formatISO8601Date(eventStartDate, eventTime)
+                let endDateString: String
+                if isMultiDay && eventEndDate > eventStartDate {
+                    endDateString = formatISO8601Date(eventEndDate, eventTime)
+                } else {
+                    // If not multi-day, set ends_at to starts_at + 1 hour
+                    let endDate = eventStartDate.addingTimeInterval(3600) // Add 1 hour
+                    endDateString = formatISO8601Date(endDate, eventTime)
+                }
+                
                 let apiEvent = EventIn(
                     name: eventName,
-                    starts_at: formatISO8601Date(eventStartDate, eventTime),
-                    ends_at: isMultiDay && eventEndDate > eventStartDate ? formatISO8601Date(eventEndDate, eventTime) : nil,
+                    starts_at: startDateString,
+                    ends_at: endDateString, // Always include ends_at
                     location: location,
                     description: "Test event from iOS app",
                     host: organizerName.isEmpty ? "Unknown" : organizerName,
-                    tags: [selectedCategory.lowercased()]
+                    tags: tagsString
                 )
                 
                 print("📤 Sending event to backend:")

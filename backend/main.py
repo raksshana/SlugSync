@@ -91,11 +91,11 @@ class EventModel(SQLModel, table=True):
 class EventIn(BaseModel):
     name: str
     starts_at: datetime
-    ends_at: Optional[datetime]
+    ends_at: Optional[datetime] = None  # Make it truly optional with default None
     location: str
-    description: Optional[str]
-    host: Optional[str]
-    tags: Optional[str]
+    description: Optional[str] = None
+    host: Optional[str] = None
+    tags: Optional[str] = None
 
     @model_validator(mode="after")
     def check_times(self):
@@ -163,20 +163,31 @@ async def get_current_user(
     )
 
     if not token:
+        print("❌ No token provided in Authorization header")
         raise credentials_exception
+
+    print(f"🔑 Received token (first 30 chars): {token[:30] if len(token) > 30 else token}...")
+    print(f"🔑 Token length: {len(token)}")
+    print(f"🔑 Using SECRET_KEY (first 10 chars): {SECRET_KEY[:10]}...")
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
+            print("❌ Token payload missing 'sub' field")
             raise credentials_exception
+        print(f"✅ Token decoded successfully for email: {email}")
         token_data = TokenData(email=email)
-    except JWTError:
+    except JWTError as e:
+        print(f"❌ JWT decode error: {str(e)}")
+        print(f"❌ This usually means the token was created with a different SECRET_KEY")
         raise credentials_exception
 
     user = session.exec(select(User).where(User.email == token_data.email)).first()
     if user is None:
+        print(f"❌ User not found for email: {token_data.email}")
         raise credentials_exception
+    print(f"✅ User authenticated: {user.email}, is_host: {user.is_host}")
     return user
 
 async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:

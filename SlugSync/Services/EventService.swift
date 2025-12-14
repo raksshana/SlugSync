@@ -12,11 +12,11 @@ import Combine
 struct EventIn: Codable {
     let name: String
     let starts_at: String // ISO 8601 format
-    let ends_at: String?
+    let ends_at: String // Always required (backend needs it, even if same as starts_at)
     let location: String
     let description: String?
     let host: String?
-    let tags: [String]
+    let tags: String? // Backend expects comma-separated string, not array
 }
 
 struct EventOut: Codable, Identifiable {
@@ -42,7 +42,7 @@ class EventService: ObservableObject {
     
     // MARK: - Fetch Events
     func fetchEvents() async throws -> [EventOut] {
-        guard let url = URL(string: "\(baseURL)/events") else {
+        guard let url = URL(string: "\(baseURL)/events/") else {
             throw NetworkError.invalidURL
         }
         
@@ -69,22 +69,35 @@ class EventService: ObservableObject {
     
     // MARK: - Create Event
     func createEvent(_ event: EventIn) async throws -> EventOut {
-        guard let url = URL(string: "\(baseURL)/events") else {
+        guard let url = URL(string: "\(baseURL)/events/") else {
             throw NetworkError.invalidURL
         }
         
         // Get access token from UserService
         guard let accessToken = UserService.shared.accessToken else {
+            print("❌ No JWT token found in UserService. User may not be logged in.")
             throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to create events"])
         }
+        
+        print("🔑 JWT Token found (length: \(accessToken.count))")
+        print("🔑 Token preview: \(String(accessToken.prefix(30)))...")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
-        let jsonData = try JSONEncoder().encode(event)
+        print("📤 Sending Authorization header: Bearer \(String(accessToken.prefix(30)))...")
+        
+        // Configure encoder to include null values
+        let encoder = JSONEncoder()
+        let jsonData = try encoder.encode(event)
         request.httpBody = jsonData
+        
+        // Debug: Print the JSON being sent
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 JSON being sent: \(jsonString)")
+        }
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
