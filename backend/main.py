@@ -542,3 +542,15 @@ def health_check():
         "message": "SlugSync API is running",
         "version": "1.0.0"
     }
+# --- 13. Debug Endpoint ---
+@app.get("/debug/user-info", tags=["debug"])
+async def debug_user_info(current_user: User = Depends(get_current_user)):
+    """Debug: Check current user's information"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "is_host": current_user.is_host,
+        "google_id": current_user.google_id,
+        "created_at": current_user.created_at
+    }
