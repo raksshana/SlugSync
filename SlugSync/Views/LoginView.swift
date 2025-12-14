@@ -11,9 +11,6 @@ struct LoginView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var userService = UserService.shared
     
-    @State private var email: String = ""
-    @State private var password: String = ""
-    @State private var isLoading: Bool = false
     @State private var isGoogleLoading: Bool = false
     @State private var errorMessage: String = ""
     private let googleSignInService = GoogleSignInService.shared
@@ -32,42 +29,19 @@ struct LoginView: View {
                 .ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 30) {
                         // Header
-                        Text("Log In")
+                        Text("Sign In")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                            .padding(.top, 40)
+                            .padding(.top, 60)
                         
-                        // Form
-                        VStack(spacing: 16) {
-                            // Email Field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Email")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                TextField("Enter your email", text: $email)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .keyboardType(.emailAddress)
-                                    .autocapitalization(.none)
-                                    .autocorrectionDisabled()
-                            }
-                            
-                            // Password Field
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Password")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                SecureField("Enter password", text: $password)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .textContentType(.password)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
-                            }
-                        }
-                        .padding(.horizontal, 30)
-                        .padding(.top, 30)
+                        Text("Sign in with your UCSC Google account")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
                         
                         // Error Message
                         if !errorMessage.isEmpty {
@@ -75,53 +49,14 @@ struct LoginView: View {
                                 .foregroundColor(.red)
                                 .font(.subheadline)
                                 .padding(.horizontal, 30)
+                                .multilineTextAlignment(.center)
                         }
-                        
-                        // Log In Button
-                        Button(action: {
-                            login()
-                        }) {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                            } else {
-                                Text("Log In")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                            }
-                        }
-                        .background(isFormValid && !isLoading ? Color.blue : Color.gray)
-                        .cornerRadius(10)
-                        .padding(.horizontal, 30)
-                        .padding(.top, 20)
-                        .disabled(isLoading || !isFormValid)
-                        .opacity(isFormValid && !isLoading ? 1.0 : 0.6)
-                        
-                        // Divider
-                        HStack {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.3))
-                                .frame(height: 1)
-                            Text("OR")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
-                                .padding(.horizontal, 10)
-                            Rectangle()
-                                .fill(Color.white.opacity(0.3))
-                                .frame(height: 1)
-                        }
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 20)
                         
                         // Google Sign-In Button
                         Button(action: {
                             signInWithGoogle()
                         }) {
-                            HStack {
+                            HStack(spacing: 12) {
                                 if isGoogleLoading {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -139,8 +74,9 @@ struct LoginView: View {
                             .cornerRadius(10)
                         }
                         .padding(.horizontal, 30)
-                        .disabled(isGoogleLoading || isLoading)
-                        .opacity(isGoogleLoading || isLoading ? 0.6 : 1.0)
+                        .padding(.top, 20)
+                        .disabled(isGoogleLoading)
+                        .opacity(isGoogleLoading ? 0.6 : 1.0)
                         
                         Spacer()
                     }
@@ -154,37 +90,6 @@ struct LoginView: View {
                         dismiss()
                     }
                     .foregroundColor(.white)
-                }
-            }
-        }
-    }
-    
-    private var isFormValid: Bool {
-        !email.isEmpty &&
-        !password.isEmpty &&
-        email.contains("@")
-    }
-    
-    private func login() {
-        guard isFormValid else {
-            errorMessage = "Please fill in all fields correctly"
-            return
-        }
-        
-        isLoading = true
-        errorMessage = ""
-        
-        Task {
-            do {
-                _ = try await userService.login(email: email, password: password)
-                await MainActor.run {
-                    isLoading = false
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    errorMessage = error.localizedDescription
                 }
             }
         }
