@@ -73,9 +73,15 @@ class EventService: ObservableObject {
             throw NetworkError.invalidURL
         }
         
+        // Get access token from UserService
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to create events"])
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
         let jsonData = try JSONEncoder().encode(event)
         request.httpBody = jsonData
@@ -122,9 +128,15 @@ class EventService: ObservableObject {
             throw NetworkError.invalidURL
         }
         
+        // Get access token from UserService
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to update events"])
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
         let jsonData = try JSONEncoder().encode(event)
         request.httpBody = jsonData
@@ -146,11 +158,17 @@ class EventService: ObservableObject {
             throw NetworkError.invalidURL
         }
         
+        // Get access token from UserService
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to delete events"])
+        }
+        
         print("🗑️ Deleting event with ID: \(id)")
         print("🌐 DELETE URL: \(url)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         

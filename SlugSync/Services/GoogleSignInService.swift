@@ -33,8 +33,8 @@ class GoogleSignInService {
     }
     
     func signIn() async throws -> String {
-        guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = await windowScene.windows.first?.rootViewController else {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
             throw NSError(domain: "GoogleSignInService", code: -1, userInfo: [NSLocalizedDescriptionKey: "No presenting view controller"])
         }
         

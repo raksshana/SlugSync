@@ -10,7 +10,6 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var userService = UserService.shared
-    @State private var showSignUp = false
     @State private var showLogin = false
     
     var body: some View {
@@ -119,41 +118,30 @@ struct ProfileView: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(.white)
                             
-                            Text("Log in to your account or create a new one")
+                            Text("Sign in with your UCSC Google account to continue")
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.9))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
                             
-                            // Log In Button
+                            // Google Sign-In Button
                             Button(action: {
                                 showLogin = true
                             }) {
-                                Text("Log In")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .cornerRadius(10)
+                                HStack(spacing: 12) {
+                                    Image(systemName: "globe")
+                                        .font(.title3)
+                                    Text("Sign in with Google")
+                                        .font(.headline)
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.red)
+                                .cornerRadius(10)
                             }
                             .padding(.horizontal, 30)
                             .padding(.top, 20)
-                            
-                            // Create Account Button
-                            Button(action: {
-                                showSignUp = true
-                            }) {
-                                Text("Create Account")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.green)
-                                    .cornerRadius(10)
-                            }
-                            .padding(.horizontal, 30)
-                            .padding(.top, 10)
                         }
                         .padding(.top, 100)
                     }
@@ -167,9 +155,6 @@ struct ProfileView: View {
                     }
                     .foregroundColor(.white)
                 }
-            }
-            .sheet(isPresented: $showSignUp) {
-                SignUpView()
             }
             .sheet(isPresented: $showLogin) {
                 LoginView()
