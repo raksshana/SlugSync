@@ -219,7 +219,7 @@ struct AddEventView: View {
                 print("📤 Sending event to backend:")
                 print("Name: \(apiEvent.name)")
                 print("Starts at: \(apiEvent.starts_at)")
-                print("Ends at: \(apiEvent.ends_at)")
+                print("Ends at: \(apiEvent.ends_at ?? "nil")")
                 print("Location: \(apiEvent.location)")
                 print("Host: \(apiEvent.host ?? "nil")")
                 print("Tags: \(apiEvent.tags ?? "nil")")

@@ -111,8 +111,41 @@ class EventService: ObservableObject {
         
         if httpResponse.statusCode != 201 {
             let responseString = String(data: data, encoding: .utf8) ?? "No response body"
-            print("Error response body: \(responseString)")
-            throw NetworkError.invalidResponse
+            print("❌ Error response body: \(responseString)")
+            
+            // Try to parse error detail for better error messages
+            struct ErrorDetail: Codable {
+                let detail: String?
+            }
+            
+            struct ValidationError: Codable {
+                let msg: String
+            }
+            
+            struct ValidationErrorResponse: Codable {
+                let detail: [ValidationError]?
+            }
+            
+            // Try to parse as simple error detail
+            if let errorDetail = try? JSONDecoder().decode(ErrorDetail.self, from: data),
+               let detail = errorDetail.detail {
+                print("❌ Error detail: \(detail)")
+                throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
+            }
+            
+            // Try to parse as validation error array
+            if let validationError = try? JSONDecoder().decode(ValidationErrorResponse.self, from: data),
+               let firstError = validationError.detail?.first {
+                print("❌ Validation error: \(firstError.msg)")
+                throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: firstError.msg])
+            }
+            
+            // If it's a 500 error, suggest checking login status
+            if httpResponse.statusCode == 500 {
+                throw NSError(domain: "EventService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error. Please try logging out and logging back in. Error: \(responseString)"])
+            }
+            
+            throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Error creating event: \(responseString)"])
         }
         
         let createdEvent = try JSONDecoder().decode(EventOut.self, from: data)
@@ -167,8 +200,13 @@ class EventService: ObservableObject {
     }
     
     // MARK: - Delete Event
-    func deleteEvent(id: Int) async throws {
-        guard let url = URL(string: "\(baseURL)/events/\(id)") else {
+    func deleteEvent(id: String) async throws {
+        // Convert String ID to Int for backend
+        guard let eventId = Int(id) else {
+            throw NSError(domain: "EventService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid event ID format"])
+        }
+        
+        guard let url = URL(string: "\(baseURL)/events/\(eventId)") else {
             throw NetworkError.invalidURL
         }
         
@@ -177,7 +215,7 @@ class EventService: ObservableObject {
             throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to delete events"])
         }
         
-        print("🗑️ Deleting event with ID: \(id)")
+        print("🗑️ Deleting event with ID: \(eventId)")
         print("🌐 DELETE URL: \(url)")
         
         var request = URLRequest(url: url)

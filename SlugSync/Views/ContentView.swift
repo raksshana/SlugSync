@@ -37,20 +37,28 @@ struct ContentView: View {
     }
     
     private func isEventInFuture(event: Event, today: Date, calendar: Calendar) -> Bool {
-        // Parse the event date
-        guard let eventDate = parseEventDate(event.date) else { return true } // If parsing fails, show the event
+        // Parse the event date from ISO8601 string (starts_at)
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         
-        // Compare dates (ignore time, just compare dates)
-        let todayStart = calendar.startOfDay(for: today)
-        let eventStart = calendar.startOfDay(for: eventDate)
+        // Try ISO8601 format first
+        if let eventDate = isoFormatter.date(from: event.starts_at) {
+            let todayStart = calendar.startOfDay(for: today)
+            let eventStart = calendar.startOfDay(for: eventDate)
+            return eventStart >= todayStart
+        }
         
-        return eventStart >= todayStart
-    }
-    
-    private func parseEventDate(_ dateString: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM dd, yyyy"
-        return formatter.date(from: dateString)
+        // Fallback: try simple format
+        let simpleFormatter = DateFormatter()
+        simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        if let eventDate = simpleFormatter.date(from: event.starts_at) {
+            let todayStart = calendar.startOfDay(for: today)
+            let eventStart = calendar.startOfDay(for: eventDate)
+            return eventStart >= todayStart
+        }
+        
+        // If parsing fails, show the event (better to show than hide)
+        return true
     }
     
     var body: some View {
@@ -166,15 +174,16 @@ struct ContentView: View {
                     // Convert API events to our Event model
                     self.events = apiEvents.map { apiEvent in
                         print("  - Event: \(apiEvent.name), ID: \(apiEvent.id), Tags: \(apiEvent.tags ?? "none")")
+                        
                         return Event(
-                            id: apiEvent.id,
+                            id: apiEvent.id, // Event model expects Int, not String
                             name: apiEvent.name,
                             location: apiEvent.location,
                             starts_at: apiEvent.starts_at,
                             ends_at: apiEvent.ends_at,
                             host: apiEvent.host,
                             description: apiEvent.description,
-                            tags: apiEvent.tags,
+                            tags: apiEvent.tags, // Event model expects String? (comma-separated), not [String]
                             created_at: apiEvent.created_at
                         )
                     }

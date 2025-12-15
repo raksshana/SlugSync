@@ -150,8 +150,8 @@ struct EventCardView: View {
     private func deleteEvent() {
         Task {
             do {
-                // Use the string ID directly
-                let eventId = event.id
+                // Convert Int ID to String for deleteEvent
+                let eventId = String(event.id)
                 try await EventService.shared.deleteEvent(id: eventId)
                 print("✅ Event deleted successfully")
                 
