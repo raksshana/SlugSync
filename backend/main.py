@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, status, Depends, Request
 from fastapi.responses import RedirectResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, model_validator
 from dotenv import load_dotenv
 import os
 from jose import jwt
@@ -90,12 +90,18 @@ class EventModel(SQLModel, table=True):
 
 class EventIn(BaseModel):
     name: str
-    starts_at: str  # Accept ISO 8601 string from iOS
-    ends_at: Optional[str] = None  # Accept ISO 8601 string from iOS
+    starts_at: datetime  # FastAPI auto-parses ISO 8601 strings to datetime
+    ends_at: Optional[datetime] = None  # FastAPI auto-parses ISO 8601 strings to datetime
     location: str
     description: Optional[str] = None
     host: Optional[str] = None
     tags: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_times(self):
+        if self.ends_at and self.ends_at <= self.starts_at:
+            raise ValueError("ends_at must be after starts_at")
+        return self
 
 class EventOut(BaseModel):
     id: int
@@ -468,8 +474,22 @@ def list_events(
         filtered_results.append(event)
     
     filtered_results.sort(key=lambda e: e.starts_at, reverse=True)
-    
-    return [EventOut.model_validate(ev) for ev in filtered_results[:limit]]
+
+    return [
+        EventOut(
+            id=ev.id,
+            name=ev.name,
+            starts_at=ev.starts_at,
+            ends_at=ev.ends_at,
+            location=ev.location,
+            description=ev.description,
+            host=ev.host,
+            tags=ev.tags,
+            created_at=ev.created_at,
+            owner_id=ev.owner_id
+        )
+        for ev in filtered_results[:limit]
+    ]
 
 @app.get("/events/{event_id}", response_model=EventOut, tags=["events"])
 def get_event(event_id: int, session: Session = Depends(get_session)):
@@ -477,7 +497,18 @@ def get_event(event_id: int, session: Session = Depends(get_session)):
     event = session.get(EventModel, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return event
+    return EventOut(
+        id=event.id,
+        name=event.name,
+        starts_at=event.starts_at,
+        ends_at=event.ends_at,
+        location=event.location,
+        description=event.description,
+        host=event.host,
+        tags=event.tags,
+        created_at=event.created_at,
+        owner_id=event.owner_id
+    )
 
 @app.post("/events/", response_model=EventOut, status_code=status.HTTP_201_CREATED, tags=["events"])
 def create_event(
@@ -496,31 +527,11 @@ def create_event(
         print(f"🔵 Creating event for user: {current_user.email}, is_host: {current_user.is_host}")
         print(f"🔵 Event data: {event_data.model_dump()}")
 
-        # Parse ISO 8601 strings to datetime objects
-        from dateutil import parser as date_parser
-        try:
-            starts_at_dt = date_parser.isoparse(event_data.starts_at)
-            ends_at_dt = date_parser.isoparse(event_data.ends_at) if event_data.ends_at else None
-            print(f"🔵 Parsed dates - starts_at: {starts_at_dt}, ends_at: {ends_at_dt}")
-        except Exception as parse_error:
-            print(f"❌ Date parsing error: {str(parse_error)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid date format. Expected ISO 8601 format. Error: {str(parse_error)}"
-            )
-
-        # Validate times
-        if ends_at_dt and ends_at_dt <= starts_at_dt:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="ends_at must be after starts_at"
-            )
-
-        # Create EventModel with parsed datetime objects
+        # Create EventModel - FastAPI already parsed ISO 8601 strings to datetime
         db_event = EventModel(
             name=event_data.name,
-            starts_at=starts_at_dt,
-            ends_at=ends_at_dt,
+            starts_at=event_data.starts_at,
+            ends_at=event_data.ends_at,
             location=event_data.location,
             description=event_data.description,
             host=event_data.host,
@@ -534,7 +545,18 @@ def create_event(
         session.refresh(db_event)
 
         print(f"✅ Event created successfully with ID: {db_event.id}")
-        return EventOut.model_validate(db_event)
+        return EventOut(
+            id=db_event.id,
+            name=db_event.name,
+            starts_at=db_event.starts_at,
+            ends_at=db_event.ends_at,
+            location=db_event.location,
+            description=db_event.description,
+            host=db_event.host,
+            tags=db_event.tags,
+            created_at=db_event.created_at,
+            owner_id=db_event.owner_id
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -566,11 +588,22 @@ def update_event(
 
     update_data = event_update.model_dump(exclude_unset=True)
     db_event.sqlmodel_update(update_data)
-    
+
     session.add(db_event)
     session.commit()
     session.refresh(db_event)
-    return EventOut.model_validate(db_event)
+    return EventOut(
+        id=db_event.id,
+        name=db_event.name,
+        starts_at=db_event.starts_at,
+        ends_at=db_event.ends_at,
+        location=db_event.location,
+        description=db_event.description,
+        host=db_event.host,
+        tags=db_event.tags,
+        created_at=db_event.created_at,
+        owner_id=db_event.owner_id
+    )
 
 @app.delete("/events/{event_id}", status_code=status.HTTP_200_OK, tags=["events"])
 def delete_event(
