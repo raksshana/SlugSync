@@ -492,17 +492,45 @@ def create_event(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new event (requires host status)"""
-    if not current_user.is_host:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Only event hosts can create events. Update your profile to become a host."
+    try:
+        if not current_user.is_host:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Only event hosts can create events. Update your profile to become a host."
+            )
+        
+        print(f"🔵 Creating event for user: {current_user.email}, is_host: {current_user.is_host}")
+        print(f"🔵 Event data: {event_data.model_dump()}")
+        
+        # Create EventModel directly from EventIn data
+        db_event = EventModel(
+            name=event_data.name,
+            starts_at=event_data.starts_at,
+            ends_at=event_data.ends_at,
+            location=event_data.location,
+            description=event_data.description,
+            host=event_data.host,
+            tags=event_data.tags,
+            owner_id=current_user.id
         )
-    
-    db_event = EventModel.model_validate(event_data, update={"owner_id": current_user.id})
-    session.add(db_event)
-    session.commit()
-    session.refresh(db_event)
-    return EventOut.model_validate(db_event)
+        print(f"🔵 Created EventModel: {db_event}")
+        
+        session.add(db_event)
+        session.commit()
+        session.refresh(db_event)
+        
+        print(f"✅ Event created successfully with ID: {db_event.id}")
+        return EventOut.model_validate(db_event)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating event: {str(e)}"
+        )
 
 @app.patch("/events/{event_id}", response_model=EventOut, tags=["events"])
 def update_event(

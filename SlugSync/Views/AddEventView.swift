@@ -178,8 +178,32 @@ struct AddEventView: View {
                     endDateString = formatISO8601Date(eventEndDate, eventTime)
                 } else {
                     // If not multi-day, set ends_at to starts_at + 1 hour
-                    let endDate = eventStartDate.addingTimeInterval(3600) // Add 1 hour
-                    endDateString = formatISO8601Date(endDate, eventTime)
+                    // Create the combined start date/time, then add 1 hour
+                    let calendar = Calendar.current
+                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: eventStartDate)
+                    let timeComponents = calendar.dateComponents([.hour, .minute], from: eventTime)
+                    var combinedComponents = DateComponents()
+                    combinedComponents.year = dateComponents.year
+                    combinedComponents.month = dateComponents.month
+                    combinedComponents.day = dateComponents.day
+                    combinedComponents.hour = timeComponents.hour
+                    combinedComponents.minute = timeComponents.minute
+                    if let combinedStartDate = calendar.date(from: combinedComponents) {
+                        let endDate = combinedStartDate.addingTimeInterval(3600) // Add 1 hour
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        endDateString = formatter.string(from: endDate)
+                    } else {
+                        // Fallback: parse start date and add 1 hour
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        if let startDate = formatter.date(from: startDateString) {
+                            let endDate = startDate.addingTimeInterval(3600)
+                            endDateString = formatter.string(from: endDate)
+                        } else {
+                            endDateString = startDateString // Last resort
+                        }
+                    }
                 }
                 
                 let apiEvent = EventIn(
@@ -195,10 +219,10 @@ struct AddEventView: View {
                 print("📤 Sending event to backend:")
                 print("Name: \(apiEvent.name)")
                 print("Starts at: \(apiEvent.starts_at)")
-                print("Ends at: \(apiEvent.ends_at ?? "nil")")
+                print("Ends at: \(apiEvent.ends_at)")
                 print("Location: \(apiEvent.location)")
                 print("Host: \(apiEvent.host ?? "nil")")
-                print("Tags: \(apiEvent.tags)")
+                print("Tags: \(apiEvent.tags ?? "nil")")
                 print("Is Multi-Day: \(isMultiDay)")
                 print("Start Date: \(eventStartDate)")
                 print("End Date: \(eventEndDate)")
