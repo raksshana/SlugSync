@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, status, Depends, Request
 from fastapi.responses import RedirectResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
-from pydantic import BaseModel, Field, model_validator, EmailStr
+from pydantic import BaseModel, Field, EmailStr, model_validator
 from dotenv import load_dotenv
 import os
 from jose import jwt
@@ -90,8 +90,8 @@ class EventModel(SQLModel, table=True):
 
 class EventIn(BaseModel):
     name: str
-    starts_at: datetime
-    ends_at: Optional[datetime] = None  # Make it truly optional with default None
+    starts_at: datetime  # FastAPI auto-parses ISO 8601 strings to datetime
+    ends_at: Optional[datetime] = None  # FastAPI auto-parses ISO 8601 strings to datetime
     location: str
     description: Optional[str] = None
     host: Optional[str] = None
@@ -474,8 +474,22 @@ def list_events(
         filtered_results.append(event)
     
     filtered_results.sort(key=lambda e: e.starts_at, reverse=True)
-    
-    return [EventOut.model_validate(ev) for ev in filtered_results[:limit]]
+
+    return [
+        EventOut(
+            id=ev.id,
+            name=ev.name,
+            starts_at=ev.starts_at,
+            ends_at=ev.ends_at,
+            location=ev.location,
+            description=ev.description,
+            host=ev.host,
+            tags=ev.tags,
+            created_at=ev.created_at,
+            owner_id=ev.owner_id
+        )
+        for ev in filtered_results[:limit]
+    ]
 
 @app.get("/events/{event_id}", response_model=EventOut, tags=["events"])
 def get_event(event_id: int, session: Session = Depends(get_session)):
@@ -483,7 +497,18 @@ def get_event(event_id: int, session: Session = Depends(get_session)):
     event = session.get(EventModel, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return event
+    return EventOut(
+        id=event.id,
+        name=event.name,
+        starts_at=event.starts_at,
+        ends_at=event.ends_at,
+        location=event.location,
+        description=event.description,
+        host=event.host,
+        tags=event.tags,
+        created_at=event.created_at,
+        owner_id=event.owner_id
+    )
 
 @app.post("/events/", response_model=EventOut, status_code=status.HTTP_201_CREATED, tags=["events"])
 def create_event(
@@ -495,14 +520,14 @@ def create_event(
     try:
         if not current_user.is_host:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only event hosts can create events. Update your profile to become a host."
             )
-        
+
         print(f"🔵 Creating event for user: {current_user.email}, is_host: {current_user.is_host}")
         print(f"🔵 Event data: {event_data.model_dump()}")
-        
-        # Create EventModel directly from EventIn data
+
+        # Create EventModel - FastAPI already parsed ISO 8601 strings to datetime
         db_event = EventModel(
             name=event_data.name,
             starts_at=event_data.starts_at,
@@ -514,13 +539,24 @@ def create_event(
             owner_id=current_user.id
         )
         print(f"🔵 Created EventModel: {db_event}")
-        
+
         session.add(db_event)
         session.commit()
         session.refresh(db_event)
-        
+
         print(f"✅ Event created successfully with ID: {db_event.id}")
-        return EventOut.model_validate(db_event)
+        return EventOut(
+            id=db_event.id,
+            name=db_event.name,
+            starts_at=db_event.starts_at,
+            ends_at=db_event.ends_at,
+            location=db_event.location,
+            description=db_event.description,
+            host=db_event.host,
+            tags=db_event.tags,
+            created_at=db_event.created_at,
+            owner_id=db_event.owner_id
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -552,11 +588,22 @@ def update_event(
 
     update_data = event_update.model_dump(exclude_unset=True)
     db_event.sqlmodel_update(update_data)
-    
+
     session.add(db_event)
     session.commit()
     session.refresh(db_event)
-    return EventOut.model_validate(db_event)
+    return EventOut(
+        id=db_event.id,
+        name=db_event.name,
+        starts_at=db_event.starts_at,
+        ends_at=db_event.ends_at,
+        location=db_event.location,
+        description=db_event.description,
+        host=db_event.host,
+        tags=db_event.tags,
+        created_at=db_event.created_at,
+        owner_id=db_event.owner_id
+    )
 
 @app.delete("/events/{event_id}", status_code=status.HTTP_200_OK, tags=["events"])
 def delete_event(
