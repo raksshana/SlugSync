@@ -9,22 +9,22 @@ import Foundation
 
 // The blueprint for a single event - matches backend EventOut structure
 struct Event: Codable, Identifiable, Hashable {
-    let id: String // Backend uses string IDs
+    let id: Int // Backend uses integer IDs
     let name: String // Backend field name
     let location: String
     let starts_at: String // ISO 8601 string from backend
     let ends_at: String? // Optional ISO 8601 string
     let host: String? // Backend field name
     let description: String?
-    let tags: [String] // Array of strings from backend
+    let tags: String? // Backend returns comma-separated string
     let created_at: String // ISO 8601 string from backend
     
     // Computed properties for UI display
     var title: String { name }
     var clubName: String? { host }
-    var category: String { 
-        // Determine category from tags
-        let tagString = tags.joined(separator: " ").lowercased()
+    var category: String {
+        // Determine category from tags (comma-separated string)
+        let tagString = (tags ?? "").lowercased()
         if tagString.contains("sport") || tagString.contains("athletic") {
             return "Sports"
         } else if tagString.contains("academic") || tagString.contains("study") || tagString.contains("career") {

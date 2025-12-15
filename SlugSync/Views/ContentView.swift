@@ -158,11 +158,15 @@ struct ContentView: View {
     private func loadEvents() {
         Task {
             do {
+                print("🔄 Loading events...")
                 let apiEvents = try await eventService.fetchEvents()
+                print("📦 Received \(apiEvents.count) events from API")
+
                 await MainActor.run {
                     // Convert API events to our Event model
                     self.events = apiEvents.map { apiEvent in
-                        Event(
+                        print("  - Event: \(apiEvent.name), ID: \(apiEvent.id), Tags: \(apiEvent.tags ?? "none")")
+                        return Event(
                             id: apiEvent.id,
                             name: apiEvent.name,
                             location: apiEvent.location,
@@ -174,13 +178,14 @@ struct ContentView: View {
                             created_at: apiEvent.created_at
                         )
                     }
+                    print("✅ Events loaded and converted. Total: \(self.events.count)")
                     self.isLoading = false
                 }
             } catch {
                 await MainActor.run {
                     self.isLoading = false
                 }
-                print("Error loading events: \(error)")
+                print("❌ Error loading events: \(error)")
             }
         }
     }
