@@ -605,7 +605,7 @@ def update_event(
         owner_id=db_event.owner_id
     )
 
-@app.delete("/events/{event_id}", status_code=status.HTTP_200_OK, tags=["events"])
+@app.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["events"])
 def delete_event(
     event_id: int,
     session: Session = Depends(get_session),
@@ -618,13 +618,14 @@ def delete_event(
 
     if event.owner_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this event"
         )
 
     session.delete(event)
     session.commit()
-    return {"message": "Event deleted successfully"}
+    # Return None for 204 No Content (no response body)
+    return None
 
 # --- 12. Health Check ---
 @app.get("/", tags=["health"])
