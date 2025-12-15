@@ -154,10 +154,12 @@ struct EventCardView: View {
                 let eventId = String(event.id)
                 try await EventService.shared.deleteEvent(id: eventId)
                 print("✅ Event deleted successfully")
-                
-                // Notify other views to refresh
-                NotificationCenter.default.post(name: .eventsUpdated, object: nil)
-                
+
+                // Notify other views to refresh on main thread
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .eventsUpdated, object: nil)
+                }
+
             } catch {
                 print("❌ Error deleting event: \(error)")
             }

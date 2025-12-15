@@ -156,6 +156,7 @@ struct ContentView: View {
             loadEvents()
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsUpdated)) { _ in
+            print("🔔 Received eventsUpdated notification - refreshing events...")
             loadEvents()
         }
         .sheet(isPresented: $showProfile) {
