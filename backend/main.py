@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, status, Depends, Request
 from fastapi.responses import RedirectResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
-from pydantic import BaseModel, Field, model_validator, EmailStr
+from pydantic import BaseModel, Field, EmailStr
 from dotenv import load_dotenv
 import os
 from jose import jwt
@@ -90,18 +90,12 @@ class EventModel(SQLModel, table=True):
 
 class EventIn(BaseModel):
     name: str
-    starts_at: datetime
-    ends_at: Optional[datetime] = None  # Make it truly optional with default None
+    starts_at: str  # Accept ISO 8601 string from iOS
+    ends_at: Optional[str] = None  # Accept ISO 8601 string from iOS
     location: str
     description: Optional[str] = None
     host: Optional[str] = None
     tags: Optional[str] = None
-
-    @model_validator(mode="after")
-    def check_times(self):
-        if self.ends_at and self.ends_at <= self.starts_at:
-            raise ValueError("ends_at must be after starts_at")
-        return self
 
 class EventOut(BaseModel):
     id: int
@@ -495,18 +489,38 @@ def create_event(
     try:
         if not current_user.is_host:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only event hosts can create events. Update your profile to become a host."
             )
-        
+
         print(f"🔵 Creating event for user: {current_user.email}, is_host: {current_user.is_host}")
         print(f"🔵 Event data: {event_data.model_dump()}")
-        
-        # Create EventModel directly from EventIn data
+
+        # Parse ISO 8601 strings to datetime objects
+        from dateutil import parser as date_parser
+        try:
+            starts_at_dt = date_parser.isoparse(event_data.starts_at)
+            ends_at_dt = date_parser.isoparse(event_data.ends_at) if event_data.ends_at else None
+            print(f"🔵 Parsed dates - starts_at: {starts_at_dt}, ends_at: {ends_at_dt}")
+        except Exception as parse_error:
+            print(f"❌ Date parsing error: {str(parse_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid date format. Expected ISO 8601 format. Error: {str(parse_error)}"
+            )
+
+        # Validate times
+        if ends_at_dt and ends_at_dt <= starts_at_dt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ends_at must be after starts_at"
+            )
+
+        # Create EventModel with parsed datetime objects
         db_event = EventModel(
             name=event_data.name,
-            starts_at=event_data.starts_at,
-            ends_at=event_data.ends_at,
+            starts_at=starts_at_dt,
+            ends_at=ends_at_dt,
             location=event_data.location,
             description=event_data.description,
             host=event_data.host,
@@ -514,11 +528,11 @@ def create_event(
             owner_id=current_user.id
         )
         print(f"🔵 Created EventModel: {db_event}")
-        
+
         session.add(db_event)
         session.commit()
         session.refresh(db_event)
-        
+
         print(f"✅ Event created successfully with ID: {db_event.id}")
         return EventOut.model_validate(db_event)
     except HTTPException:
