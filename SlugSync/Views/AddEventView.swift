@@ -10,6 +10,7 @@ import SwiftUI
 struct AddEventView: View {
     @State private var eventName: String = ""
     @State private var organizerName: String = ""
+    @State private var eventDescription: String = ""
     @State private var eventStartDate: Date = Date()
     @State private var eventEndDate: Date = Date()
     @State private var eventTime: Date = Date()
@@ -53,7 +54,16 @@ struct AddEventView: View {
                             TextField("Enter event name", text: $eventName)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                         }
-                        
+
+                        // Event Description
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Description")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            TextField("Enter event description", text: $eventDescription)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                        }
+
                         // Location
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Location")
@@ -211,7 +221,7 @@ struct AddEventView: View {
                     starts_at: startDateString,
                     ends_at: endDateString, // Always include ends_at
                     location: location,
-                    description: "Test event from iOS app",
+                    description: eventDescription.isEmpty ? nil : eventDescription,
                     host: organizerName.isEmpty ? "Unknown" : organizerName,
                     tags: tagsString
                 )
@@ -234,6 +244,7 @@ struct AddEventView: View {
                 // Clear form
                 eventName = ""
                 organizerName = ""
+                eventDescription = ""
                 location = ""
                 selectedCategory = "Academic"
                 isMultiDay = false
