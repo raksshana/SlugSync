@@ -10,7 +10,9 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var userService = UserService.shared
-    @State private var showLogin = false
+    @State private var isGoogleLoading: Bool = false
+    @State private var errorMessage: String = ""
+    private let googleSignInService = GoogleSignInService.shared
     
     var body: some View {
         NavigationView {
@@ -124,15 +126,30 @@ struct ProfileView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
                             
+                            // Error Message
+                            if !errorMessage.isEmpty {
+                                Text(errorMessage)
+                                    .foregroundColor(.red)
+                                    .font(.subheadline)
+                                    .padding(.horizontal, 30)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 10)
+                            }
+                            
                             // Google Sign-In Button
                             Button(action: {
-                                showLogin = true
+                                signInWithGoogle()
                             }) {
                                 HStack(spacing: 12) {
-                                    Image(systemName: "globe")
-                                        .font(.title3)
-                                    Text("Sign in with Google")
-                                        .font(.headline)
+                                    if isGoogleLoading {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    } else {
+                                        Image(systemName: "globe")
+                                            .font(.title3)
+                                        Text("Sign in with Google")
+                                            .font(.headline)
+                                    }
                                 }
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -142,6 +159,8 @@ struct ProfileView: View {
                             }
                             .padding(.horizontal, 30)
                             .padding(.top, 20)
+                            .disabled(isGoogleLoading)
+                            .opacity(isGoogleLoading ? 0.6 : 1.0)
                         }
                         .padding(.top, 100)
                     }
@@ -156,8 +175,29 @@ struct ProfileView: View {
                     .foregroundColor(.white)
                 }
             }
-            .sheet(isPresented: $showLogin) {
-                LoginView()
+        }
+    }
+    
+    private func signInWithGoogle() {
+        isGoogleLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                // Get Google ID token
+                let idToken = try await googleSignInService.signIn()
+                
+                // Login with Google token
+                _ = try await userService.loginWithGoogle(idToken: idToken)
+                
+                await MainActor.run {
+                    isGoogleLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isGoogleLoading = false
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }
