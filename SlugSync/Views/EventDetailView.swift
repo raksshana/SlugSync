@@ -146,6 +146,27 @@ struct EventDetailView: View {
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
                             }
+                            
+                            // Description Card (if available)
+                            if let description = event.description, !description.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Image(systemName: "text.alignleft")
+                                            .foregroundColor(.purple)
+                                            .font(.title2)
+                                        Text("Description")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    Text(description)
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
                         }
                         .padding(.horizontal)
                         
