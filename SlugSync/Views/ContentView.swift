@@ -30,6 +30,7 @@ struct ContentView: View {
         let today = Date()
         let calendar = Calendar.current
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         // First filter by category and search
         let categoryFiltered = selectedCategory == "All" ? events : events.filter { $0.category == selectedCategory }
@@ -47,25 +48,67 @@ struct ContentView: View {
         // Apply date range filter if active
         let dateFiltered: [Event]
         if isDateFilterActive {
+            print("📅 Date filter active: \(filterStartDate) to \(filterEndDate)")
             dateFiltered = futureEvents.filter { event in
-                guard let eventDate = formatter.date(from: event.starts_at) else {
-                    return true
+                // Try to parse the event date
+                var eventDate: Date?
+
+                // Try ISO8601 with fractional seconds first
+                eventDate = formatter.date(from: event.starts_at)
+
+                // Fallback to simple format if needed
+                if eventDate == nil {
+                    let simpleFormatter = DateFormatter()
+                    simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                    eventDate = simpleFormatter.date(from: event.starts_at)
                 }
+
+                guard let parsedDate = eventDate else {
+                    print("⚠️ Failed to parse date for event: \(event.name), date string: \(event.starts_at)")
+                    return false  // Don't include events with unparseable dates
+                }
+
                 let startOfFilterStart = calendar.startOfDay(for: filterStartDate)
                 let endOfFilterEnd = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: filterEndDate) ?? filterEndDate
-                return eventDate >= startOfFilterStart && eventDate <= endOfFilterEnd
+
+                let isInRange = parsedDate >= startOfFilterStart && parsedDate <= endOfFilterEnd
+
+                if !isInRange {
+                    print("🚫 Event '\(event.name)' filtered out - date: \(parsedDate), range: \(startOfFilterStart) to \(endOfFilterEnd)")
+                }
+
+                return isInRange
             }
+            print("📊 Events after date filtering: \(dateFiltered.count) out of \(futureEvents.count)")
         } else {
             dateFiltered = futureEvents
         }
 
         // Sort by start date - soonest first
         return dateFiltered.sorted { event1, event2 in
-            guard let date1 = formatter.date(from: event1.starts_at),
-                  let date2 = formatter.date(from: event2.starts_at) else {
+            var date1: Date?
+            var date2: Date?
+
+            // Parse date1
+            date1 = formatter.date(from: event1.starts_at)
+            if date1 == nil {
+                let simpleFormatter = DateFormatter()
+                simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                date1 = simpleFormatter.date(from: event1.starts_at)
+            }
+
+            // Parse date2
+            date2 = formatter.date(from: event2.starts_at)
+            if date2 == nil {
+                let simpleFormatter = DateFormatter()
+                simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                date2 = simpleFormatter.date(from: event2.starts_at)
+            }
+
+            guard let parsedDate1 = date1, let parsedDate2 = date2 else {
                 return false
             }
-            return date1 < date2
+            return parsedDate1 < parsedDate2
         }
     }
     
