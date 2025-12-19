@@ -68,13 +68,18 @@ struct ContentView: View {
                     return false  // Don't include events with unparseable dates
                 }
 
-                let startOfFilterStart = calendar.startOfDay(for: filterStartDate)
-                let endOfFilterEnd = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: filterEndDate) ?? filterEndDate
+                // Normalize dates to start of day for comparison
+                let eventStartOfDay = calendar.startOfDay(for: parsedDate)
+                let filterStartOfDay = calendar.startOfDay(for: filterStartDate)
+                let filterEndOfDay = calendar.startOfDay(for: filterEndDate)
 
-                let isInRange = parsedDate >= startOfFilterStart && parsedDate <= endOfFilterEnd
+                // Event is in range if its date is >= start date and <= end date
+                let isInRange = eventStartOfDay >= filterStartOfDay && eventStartOfDay <= filterEndOfDay
 
                 if !isInRange {
-                    print("🚫 Event '\(event.name)' filtered out - date: \(parsedDate), range: \(startOfFilterStart) to \(endOfFilterEnd)")
+                    print("🚫 Event '\(event.name)' filtered out - event date: \(eventStartOfDay), range: \(filterStartOfDay) to \(filterEndOfDay)")
+                } else {
+                    print("✅ Event '\(event.name)' included - event date: \(eventStartOfDay), range: \(filterStartOfDay) to \(filterEndOfDay)")
                 }
 
                 return isInRange
@@ -339,7 +344,8 @@ struct ContentView: View {
                             host: apiEvent.host,
                             description: apiEvent.description,
                             tags: apiEvent.tags, // Event model expects String? (comma-separated), not [String]
-                            created_at: apiEvent.created_at
+                            created_at: apiEvent.created_at,
+                            owner_id: apiEvent.owner_id
                         )
                     }
                     print("✅ Events loaded and converted. Total: \(self.events.count)")

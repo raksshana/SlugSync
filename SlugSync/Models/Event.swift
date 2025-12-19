@@ -18,6 +18,7 @@ struct Event: Codable, Identifiable, Hashable {
     let description: String?
     let tags: String? // Backend returns comma-separated string
     let created_at: String // ISO 8601 string from backend
+    let owner_id: Int? // Owner's user ID
     
     // Computed properties for UI display
     var title: String { name }
