@@ -155,13 +155,34 @@ struct EventCardView: View {
                 try await EventService.shared.deleteEvent(id: eventId)
                 print("✅ Event deleted successfully")
 
-                // Notify other views to refresh on main thread
+                // Remove from favorites if it was favorited
                 await MainActor.run {
+                    removeFavoriteIfExists()
+
+                    // Notify other views to refresh
                     NotificationCenter.default.post(name: .eventsUpdated, object: nil)
                 }
 
             } catch {
                 print("❌ Error deleting event: \(error)")
+            }
+        }
+    }
+
+    private func removeFavoriteIfExists() {
+        var favorites = loadFavorites()
+        let originalCount = favorites.count
+
+        // Remove the deleted event from favorites
+        favorites.removeAll { $0.id == event.id }
+
+        // Only update if something was actually removed
+        if favorites.count < originalCount {
+            if let encoded = try? JSONEncoder().encode(favorites) {
+                UserDefaults.standard.set(encoded, forKey: "favoriteEvents")
+                // Notify that favorites changed
+                NotificationCenter.default.post(name: .favoritesChanged, object: nil)
+                print("✅ Removed deleted event from favorites")
             }
         }
     }
