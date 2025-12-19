@@ -22,7 +22,7 @@ Many UCSC students face the challenge of finding opportunities/events to build t
 ## Tech Stack
 
 Frontend – Swift (iOS App):
-We used Swift to build the iOS app, and it handles everything users see and interact with like buttons, event listings, and swiping features. By using Swift, we were able to make the app on IOS and make sure the users have a clear and easy-to-use interface.
+We used Swift to build the iOS app, and it handles everything users see and interact with like buttons, event listings, and swiping features. By using Swift, we were able to make the app on iOS and make sure the users have a clear and easy-to-use interface.
 
 Backend – FastAPI (Python):
 The backend is powered by FastAPI, a modern and high-performance web framework for Python. It processes requests from the app, such as logging in users, fetching event data, and storing user preferences. FastAPI is known for being fast, easy to scale, and great for building APIs that communicate with mobile apps.
@@ -38,13 +38,13 @@ The FastAPI backend and database are deployed on Render, a cloud platform that h
 ## Backend Architecture & Core Functionality
 - RESTful FastAPI backend supporting full CRUD operations for events:
 (ADD SCREENSHOTS FROM RENDER)
-  - Create:
+  - Create:Authorized club representatives will post events through an API
 
-  - Read:
+  - Read:Users can retrieve event listings and details
 
-  - Update:
+  - Update:Event data can be modified by authorized users
 
-  - Delete:
+  - Delete:Events can be removed through authorized requests
 
 - Authentication and role-based access control (host vs. student)
 
