@@ -18,21 +18,54 @@ struct ContentView: View {
     @State private var events: [Event] = []
     @State private var isLoading: Bool = true
     @State private var showProfile: Bool = false
+    @State private var showDateFilter: Bool = false
+    @State private var filterStartDate: Date = Date()
+    @State private var filterEndDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+    @State private var isDateFilterActive: Bool = false
     @StateObject private var eventService = EventService.shared
-    
+
     let categories = ["All", "Sports", "Academic", "Social", "Clubs"]
     
     var filteredEvents: [Event] {
         let today = Date()
         let calendar = Calendar.current
-        
+        let formatter = ISO8601DateFormatter()
+
         // First filter by category and search
         let categoryFiltered = selectedCategory == "All" ? events : events.filter { $0.category == selectedCategory }
-        let searchFiltered = searchText.isEmpty ? categoryFiltered : categoryFiltered.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        
+        let searchFiltered = searchText.isEmpty ? categoryFiltered : categoryFiltered.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            ($0.description?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+            $0.location.localizedCaseInsensitiveContains(searchText)
+        }
+
         // Then filter out past events
-        return searchFiltered.filter { event in
+        let futureEvents = searchFiltered.filter { event in
             return isEventInFuture(event: event, today: today, calendar: calendar)
+        }
+
+        // Apply date range filter if active
+        let dateFiltered: [Event]
+        if isDateFilterActive {
+            dateFiltered = futureEvents.filter { event in
+                guard let eventDate = formatter.date(from: event.starts_at) else {
+                    return true
+                }
+                let startOfFilterStart = calendar.startOfDay(for: filterStartDate)
+                let endOfFilterEnd = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: filterEndDate) ?? filterEndDate
+                return eventDate >= startOfFilterStart && eventDate <= endOfFilterEnd
+            }
+        } else {
+            dateFiltered = futureEvents
+        }
+
+        // Sort by start date - soonest first
+        return dateFiltered.sorted { event1, event2 in
+            guard let date1 = formatter.date(from: event1.starts_at),
+                  let date2 = formatter.date(from: event2.starts_at) else {
+                return false
+            }
+            return date1 < date2
         }
     }
     
@@ -91,12 +124,90 @@ struct ContentView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
                     TextField("Search events...", text: $searchText)
+
+                    // Date filter toggle button
+                    Button(action: {
+                        showDateFilter.toggle()
+                    }) {
+                        Image(systemName: isDateFilterActive ? "calendar.badge.clock" : "calendar")
+                            .foregroundColor(isDateFilterActive ? .blue : .gray)
+                            .padding(.leading, 8)
+                    }
                 }
                 .padding(12)
                 .background(Color(.systemGray6))
                 .cornerRadius(10)
                 .padding(.horizontal)
                 .padding(.bottom, 15)
+
+                // Date Filter Panel
+                if showDateFilter {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Filter by Date Range")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("From")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                DatePicker("", selection: $filterStartDate, displayedComponents: .date)
+                                    .labelsHidden()
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("To")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                DatePicker("", selection: $filterEndDate, displayedComponents: .date)
+                                    .labelsHidden()
+                            }
+                        }
+
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                isDateFilterActive = true
+                                showDateFilter = false
+                            }) {
+                                Text("Apply Filter")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(Color.blue)
+                                    .cornerRadius(8)
+                            }
+
+                            if isDateFilterActive {
+                                Button(action: {
+                                    isDateFilterActive = false
+                                    showDateFilter = false
+                                }) {
+                                    Text("Clear")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.red)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                    .padding(.bottom, 15)
+                }
                 
                 // Category Filters
                 ScrollView(.horizontal, showsIndicators: false) {

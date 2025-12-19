@@ -449,15 +449,28 @@ def list_events(
     q: Optional[str] = Query(None, min_length=3),
     tag: Optional[str] = Query(None),
     start_date: Optional[datetime] = Query(None),
-    limit: int = Query(50, ge=1, le=500)
+    end_date: Optional[datetime] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    include_past: bool = Query(False, description="Include past events")
 ):
     """List all events with optional filtering"""
     statement = select(EventModel)
+
+    # Filter out past events by default
+    if not include_past:
+        from datetime import timezone
+        statement = statement.where(EventModel.starts_at >= datetime.now(timezone.utc))
+
+    # Filter by start date if provided
     if start_date:
         statement = statement.where(EventModel.starts_at >= start_date)
-    
+
+    # Filter by end date if provided
+    if end_date:
+        statement = statement.where(EventModel.starts_at <= end_date)
+
     results = session.exec(statement).all()
-    
+
     filtered_results = []
     for event in results:
         if q:
@@ -472,8 +485,9 @@ def list_events(
             if tag_lower not in event_tags:
                 continue
         filtered_results.append(event)
-    
-    filtered_results.sort(key=lambda e: e.starts_at, reverse=True)
+
+    # Sort by start date - soonest first
+    filtered_results.sort(key=lambda e: e.starts_at)
 
     return [
         EventOut(
