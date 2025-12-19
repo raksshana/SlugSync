@@ -174,27 +174,29 @@ class EventService: ObservableObject {
         guard let url = URL(string: "\(baseURL)/events/\(id)") else {
             throw NetworkError.invalidURL
         }
-        
+
         // Get access token from UserService
         guard let accessToken = UserService.shared.accessToken else {
             throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to update events"])
         }
-        
+
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        
+
         let jsonData = try JSONEncoder().encode(event)
         request.httpBody = jsonData
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("❌ Error updating event: \(responseString)")
             throw NetworkError.invalidResponse
         }
-        
+
         let updatedEvent = try JSONDecoder().decode(EventOut.self, from: data)
         return updatedEvent
     }

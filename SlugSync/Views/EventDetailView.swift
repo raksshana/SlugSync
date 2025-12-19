@@ -11,7 +11,16 @@ struct EventDetailView: View {
     let event: Event
     @Environment(\.presentationMode) var presentationMode
     @State private var isFavorite: Bool = false
-    
+    @State private var showEditSheet: Bool = false
+
+    // Check if current user owns this event
+    private var isOwner: Bool {
+        guard let currentUser = UserService.shared.currentUser else {
+            return false
+        }
+        return event.owner_id == currentUser.id
+    }
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -177,11 +186,24 @@ struct EventDetailView: View {
             }
             .navigationTitle("Event Details")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: Button("Done") {
-                presentationMode.wrappedValue.dismiss()
-            })
+            .navigationBarItems(
+                leading: Button("Done") {
+                    presentationMode.wrappedValue.dismiss()
+                },
+                trailing: isOwner ? AnyView(
+                    Button(action: {
+                        showEditSheet = true
+                    }) {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.blue)
+                    }
+                ) : AnyView(EmptyView())
+            )
             .onAppear {
                 loadFavoriteStatus()
+            }
+            .sheet(isPresented: $showEditSheet) {
+                EditEventView(event: event)
             }
         }
     }
