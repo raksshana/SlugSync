@@ -17,77 +17,68 @@ struct ProfileView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                Color.black
+                    .ignoresSafeArea()
                 
                 VStack(spacing: 30) {
                     if let user = userService.currentUser {
                         // User is logged in
                         VStack(spacing: 30) {
-                            // Profile Picture (empty placeholder)
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                                    .frame(width: 120, height: 120)
-                                
-                                Image(systemName: "person.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 60, height: 60)
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                            .padding(.top, 40)
-                            
-                            // User Info Section
-                            VStack(alignment: .leading, spacing: 20) {
-                                // Name
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Name:")
-                                        .font(.headline)
-                                        .foregroundColor(.white.opacity(0.8))
-                                    Text(user.name)
-                                        .font(.title2)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                }
-                                
-                                Divider()
-                                    .background(Color.white.opacity(0.3))
-                                
-                                // Email
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Email:")
-                                        .font(.headline)
-                                        .foregroundColor(.white.opacity(0.8))
-                                    Text(user.email)
-                                        .font(.title3)
-                                        .foregroundColor(.white)
-                                }
-                                
-                                // Member Since
-                                if let createdDate = parseDate(user.created_at) {
-                                    Divider()
-                                        .background(Color.white.opacity(0.3))
+                            // Profile Picture and User Info (side by side)
+                            HStack(alignment: .top, spacing: 20) {
+                                // Profile Picture (left side)
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.white.opacity(0.2))
+                                        .frame(width: 100, height: 100)
                                     
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Member Since:")
-                                            .font(.headline)
-                                            .foregroundColor(.white.opacity(0.8))
-                                        Text(formatDate(createdDate))
-                                            .font(.subheadline)
-                                            .foregroundColor(.white.opacity(0.9))
+                                    Image(systemName: "person.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 50, height: 50)
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+                                
+                                // User Info Section (right side)
+                                VStack(alignment: .leading, spacing: 15) {
+                                    // Name
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Name:")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                        Text(user.name)
+                                            .font(.title3)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    // Email
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Email:")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.7))
+                                        Text(user.email)
+                                            .font(.body)
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    // Member Since
+                                    if let createdDate = parseDate(user.created_at) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Member Since:")
+                                                .font(.caption)
+                                                .foregroundColor(.white.opacity(0.7))
+                                            Text(formatDate(createdDate))
+                                                .font(.subheadline)
+                                                .foregroundColor(.white.opacity(0.9))
+                                        }
                                     }
                                 }
+                                
+                                Spacer()
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 30)
+                            .padding(.top, 40)
                             
                             Spacer()
                             
@@ -173,6 +164,7 @@ struct ProfileView: View {
                         dismiss()
                     }
                     .foregroundColor(.white)
+                    .font(.headline)
                 }
             }
         }

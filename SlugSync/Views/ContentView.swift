@@ -146,33 +146,37 @@ struct ContentView: View {
         NavigationView {
             VStack(spacing: 0) {
                 // Header
-                HStack {
-                    Text("UCSC")
-                        .font(.largeTitle)
+                HStack(alignment: .center) {
+                    Text("SlugSync")
+                        .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4)) // Navy blue
-                    Text("Event Tracker")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4)) // Navy blue
+                        .foregroundColor(.white)
                     Spacer()
                     Button(action: {
                         showProfile = true
                     }) {
                         Image(systemName: "person.circle.fill")
                             .font(.title2)
-                            .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4))
+                            .foregroundColor(.white)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 20)
+                .padding(.top, 70)
+                .padding(.bottom, 15)
                 
                 // Search Bar
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
-                    TextField("Search events...", text: $searchText)
-
+                    ZStack(alignment: .leading) {
+                        if searchText.isEmpty {
+                            Text("Search events...")
+                                .foregroundColor(.gray)
+                        }
+                        TextField("", text: $searchText)
+                            .foregroundColor(.primary)
+                    }
+                    
                     // Date filter toggle button
                     Button(action: {
                         showDateFilter.toggle()
@@ -183,9 +187,13 @@ struct ContentView: View {
                     }
                 }
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(Color(.systemGray5))
                 .cornerRadius(10)
-                .padding(.horizontal)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal, 20)
                 .padding(.bottom, 15)
 
                 // Date Filter Panel
@@ -267,17 +275,25 @@ struct ContentView: View {
                                 Text(category)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
+                                    .foregroundColor(.white)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
-                                    .background(selectedCategory == category ? Color.blue : Color(.systemGray5))
-                                    .foregroundColor(selectedCategory == category ? .white : .primary)
+                                    .background(
+                                        Group {
+                                            if selectedCategory == category {
+                                                Color(red: 0.3, green: 0.7, blue: 1.0) // Light blue
+                                            } else {
+                                                Color(red: 0.0, green: 0.2, blue: 0.4) // Dark blue
+                                            }
+                                        }
+                                    )
                                     .cornerRadius(20)
                             }
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, 15)
                 
                 // Events List
                 if isLoading {
@@ -285,11 +301,17 @@ struct ContentView: View {
                         Spacer()
                         ProgressView("Loading events...")
                             .font(.headline)
+                            .foregroundColor(.white)
                         Spacer()
                     }
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 20) {
+                        let columns = [
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10)
+                        ]
+                        
+                        LazyVGrid(columns: columns, spacing: 15) {
                             ForEach(filteredEvents) { event in
                                 EventCardView(event: event)
                             }
@@ -300,16 +322,8 @@ struct ContentView: View {
                 }
             }
             .navigationBarHidden(true)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .background(Color.black)
+            .ignoresSafeArea()
         }
         .onAppear {
             loadEvents()

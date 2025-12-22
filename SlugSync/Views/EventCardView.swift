@@ -15,29 +15,39 @@ struct EventCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image with category tag and favorite button
-            ZStack(alignment: .topLeading) {
-                // Event image
-                Image(systemName: event.imageName)
-                    .font(.system(size: 60))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, maxHeight: 150)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+            ZStack {
+                // Gradient background
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.1, green: 0.3, blue: 0.7), // Medium-dark blue
+                        Color(red: 0.95, green: 0.8, blue: 0.2)  // Warm golden-yellow
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(maxWidth: .infinity, maxHeight: 100)
                 
-                // Category tag
-                Text(event.category)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.thinMaterial)
-                    .cornerRadius(8)
-                    .padding(12)
+                // Category tag (top left)
+                VStack {
+                    HStack {
+                        Text(event.category)
+                            .font(.system(size: 9))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.thinMaterial)
+                            .cornerRadius(5)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(8)
+                
+                // Event image (centered)
+                Image(systemName: event.imageName)
+                    .font(.system(size: 40))
+                    .foregroundColor(.white)
                 
                 // Bookmark button (top right)
                 VStack {
@@ -47,55 +57,61 @@ struct EventCardView: View {
                             toggleFavorite()
                         }) {
                             Image(systemName: isFavorite ? "bookmark.fill" : "bookmark")
-                                .font(.title2)
+                                .font(.title3)
                                 .foregroundColor(isFavorite ? .yellow : .white)
-                                .padding(8)
+                                .padding(6)
                                 .background(.thinMaterial)
-                                .cornerRadius(20)
+                                .cornerRadius(18)
                         }
-                        .padding(12)
+                        .padding(8)
                     }
                     Spacer()
                 }
-                
             }
             
             // Event details
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(event.title)
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
+                    .lineLimit(2)
                 
                 // Date
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: "calendar")
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.8))
+                        .font(.caption)
                     Text(event.date)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
                 }
                 
                 // Time
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: "clock")
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.8))
+                        .font(.caption)
                     Text(event.time)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
                 }
                 
                 // Location
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: "mappin.and.ellipse")
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white.opacity(0.8))
+                        .font(.caption)
                     Text(event.location)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
                 }
                 
                 Divider()
-                    .background(Color.gray.opacity(0.3))
+                    .background(Color.white.opacity(0.3))
                     .padding(.vertical, 5)
                 
                 // Bottom buttons
@@ -108,7 +124,7 @@ struct EventCardView: View {
                             .font(.caption)
                             .foregroundColor(.red)
                             .padding(6)
-                            .background(.thinMaterial)
+                            .background(Color.white.opacity(0.2))
                             .cornerRadius(15)
                     }
                     
@@ -118,22 +134,22 @@ struct EventCardView: View {
                     Button(action: {
                         showDetails = true
                     }) {
-                        HStack {
-                            Text("View Details")
-                                .font(.footnote)
+                        HStack(spacing: 2) {
+                            Text("Details")
+                                .font(.caption2)
                                 .fontWeight(.semibold)
                             Image(systemName: "arrow.right")
-                                .font(.footnote)
+                                .font(.caption2)
                         }
-                        .foregroundColor(.blue)
+                        .foregroundColor(.white)
                     }
                 }
             }
-            .padding()
+            .padding(10)
         }
-        .background(Color.white.opacity(0.9))
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+        .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+        .cornerRadius(15)
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
         .onAppear {
             loadFavoriteStatus()
         }

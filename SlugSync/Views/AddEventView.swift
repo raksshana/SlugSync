@@ -23,119 +23,202 @@ struct AddEventView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 25) {
-                    // Header
-                    HStack {
-                        Text("Add Event")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4)) // Navy blue
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
-                    
-                    VStack(spacing: 20) {
+            VStack(spacing: 0) {
+                // Header (sticky)
+                HStack {
+                    Text("Add Event")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 70)
+                .padding(.bottom, 15)
+                .background(Color.black)
+                
+                ScrollView {
+                    VStack(spacing: 25) {
+                        VStack(spacing: 20) {
                         // Organizer/Club Name
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Organizer/Club Name")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter organizer or club name", text: $organizerName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                            ZStack(alignment: .leading) {
+                                if organizerName.isEmpty {
+                                    Text("Enter organizer or club name")
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .padding(.horizontal, 15)
+                                }
+                                TextField("", text: $organizerName)
+                                    .foregroundColor(.white)
+                                    .padding()
+                            }
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                            .cornerRadius(10)
                         }
                         
                         // Event Name
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Event Name")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event name", text: $eventName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                            ZStack(alignment: .leading) {
+                                if eventName.isEmpty {
+                                    Text("Enter event name")
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .padding(.horizontal, 15)
+                                }
+                                TextField("", text: $eventName)
+                                    .foregroundColor(.white)
+                                    .padding()
+                            }
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                            .cornerRadius(10)
                         }
 
                         // Event Description
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Description")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event description", text: $eventDescription)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                            ZStack(alignment: .leading) {
+                                if eventDescription.isEmpty {
+                                    Text("Enter event description")
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .padding(.horizontal, 15)
+                                }
+                                TextField("", text: $eventDescription)
+                                    .foregroundColor(.white)
+                                    .padding()
+                            }
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                            .cornerRadius(10)
                         }
 
                         // Location
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Location")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event location", text: $location)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .foregroundColor(.white)
+                            ZStack(alignment: .leading) {
+                                if location.isEmpty {
+                                    Text("Enter event location")
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .padding(.horizontal, 15)
+                                }
+                                TextField("", text: $location)
+                                    .foregroundColor(.white)
+                                    .padding()
+                            }
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                            .cornerRadius(10)
                         }
                         
                         // Category Selection
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Category")
                                 .font(.headline)
-                                .foregroundColor(.primary)
-                            Picker("Category", selection: $selectedCategory) {
-                                ForEach(categories, id: \.self) { category in
-                                    Text(category).tag(category)
+                                .foregroundColor(.white)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    ForEach(categories, id: \.self) { category in
+                                        Button(action: {
+                                            selectedCategory = category
+                                        }) {
+                                            Text(category)
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    Group {
+                                                        if selectedCategory == category {
+                                                            Color(red: 0.3, green: 0.7, blue: 1.0) // Light blue
+                                                        } else {
+                                                            Color(red: 0.0, green: 0.2, blue: 0.4) // Dark blue
+                                                        }
+                                                    }
+                                                )
+                                                .cornerRadius(20)
+                                        }
+                                    }
                                 }
                             }
-                            .pickerStyle(SegmentedPickerStyle())
                         }
                         
                         // Multi-Day Toggle
-                        Toggle("Multi-Day Event", isOn: $isMultiDay)
-                            .font(.headline)
+                        HStack {
+                            Text("Multi-Day Event")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Toggle("", isOn: $isMultiDay)
+                                .tint(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue when on
+                        }
                         
                         if isMultiDay {
                             // Start Date
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Start Date")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                 DatePicker("Event Start Date", selection: $eventStartDate, displayedComponents: .date)
                                     .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
                             }
                             
                             // End Date
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("End Date")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                 DatePicker("Event End Date", selection: $eventEndDate, displayedComponents: .date)
                                     .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
                             }
                         } else {
                             // Single Date Selection
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Date")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                 DatePicker("Event Date", selection: $eventStartDate, displayedComponents: .date)
                                     .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
                             }
                         }
                         
                         // All Day Toggle
-                        Toggle("All Day Event", isOn: $isAllDay)
-                            .font(.headline)
+                        HStack {
+                            Text("All Day Event")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Toggle("", isOn: $isAllDay)
+                                .tint(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue when on
+                        }
                         
                         // Time Selection (only if not all day)
                         if !isAllDay {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Time")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                 DatePicker("Event Time", selection: $eventTime, displayedComponents: .hourAndMinute)
                                     .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
                             }
                         }
                         
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                     
                     // Add Event Button
                     Button(action: {
@@ -151,26 +234,19 @@ struct AddEventView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Navy blue
+                        .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
                         .cornerRadius(12)
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                     .padding(.top, 20)
                     
-                    Spacer(minLength: 50)
+                        Spacer(minLength: 50)
+                    }
                 }
             }
             .navigationBarHidden(true)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 1.0, green: 0.8, blue: 0.0), // UCSC Gold
-                        Color(red: 0.0, green: 0.3, blue: 0.6)  // UCSC Blue
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .background(Color.black)
+            .ignoresSafeArea()
         }
     }
     
