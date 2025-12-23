@@ -272,9 +272,7 @@ class EventService: ObservableObject {
             print("⚠️ Favorites endpoint not found (404). URL: \(url.absoluteString)")
             print("⚠️ Response body: \(responseString)")
             print("⚠️ Backend may not be deployed yet or table doesn't exist. Returning empty favorites.")
-            await MainActor.run {
-                self.favoriteIds = []
-            }
+            await setFavoriteIds([])
             return []
         } else if httpResponse.statusCode != 200 {
             let responseString = String(data: data, encoding: .utf8) ?? "No response body"
@@ -283,9 +281,7 @@ class EventService: ObservableObject {
         }
 
         let events = try JSONDecoder().decode([EventOut].self, from: data)
-        await MainActor.run {
-            self.favoriteIds = Set(events.map { $0.id })
-        }
+        await setFavoriteIds(Set(events.map { $0.id }))
         return events
     }
 
@@ -314,9 +310,7 @@ class EventService: ObservableObject {
             throw NetworkError.invalidResponse
         }
 
-        await MainActor.run {
-            favoriteIds.insert(eventId)
-        }
+        await setFavoriteIds(favoriteIds.union([eventId]))
     }
 
     func unfavoriteEvent(id eventId: Int) async throws {
@@ -344,9 +338,12 @@ class EventService: ObservableObject {
             throw NetworkError.invalidResponse
         }
 
-        await MainActor.run {
-            favoriteIds.remove(eventId)
-        }
+        await setFavoriteIds(favoriteIds.subtracting([eventId]))
+    }
+    
+    @MainActor
+    private func setFavoriteIds(_ ids: Set<Int>) {
+        favoriteIds = ids
     }
     
     @MainActor

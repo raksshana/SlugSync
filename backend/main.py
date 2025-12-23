@@ -694,22 +694,34 @@ def favorite_event(
     current_user: User = Depends(get_current_user)
 ):
     """Favorite an event for the current user (idempotent)."""
-    event = session.get(EventModel, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    try:
+        event = session.get(EventModel, event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
 
-    existing = session.exec(
-        select(Favorite).where(
-            Favorite.user_id == current_user.id,
-            Favorite.event_id == event_id
-        )
-    ).first()
-    if existing:
+        existing = session.exec(
+            select(Favorite).where(
+                Favorite.user_id == current_user.id,
+                Favorite.event_id == event_id
+            )
+        ).first()
+        if existing:
+            return
+
+        session.add(Favorite(user_id=current_user.id, event_id=event_id))
+        session.commit()
         return
-
-    session.add(Favorite(user_id=current_user.id, event_id=event_id))
-    session.commit()
-    return
+    except Exception as e:
+        print(f"❌ Error favoriting event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            raise HTTPException(
+                status_code=500,
+                detail="Favorites table does not exist. Please create the table in the database."
+            )
+        raise HTTPException(status_code=500, detail=f"Error favoriting event: {str(e)}")
 
 @app.delete("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
 def unfavorite_event(
@@ -718,16 +730,28 @@ def unfavorite_event(
     current_user: User = Depends(get_current_user)
 ):
     """Unfavorite an event for the current user (idempotent)."""
-    fav = session.exec(
-        select(Favorite).where(
-            Favorite.user_id == current_user.id,
-            Favorite.event_id == event_id
-        )
-    ).first()
-    if fav:
-        session.delete(fav)
-        session.commit()
-    return
+    try:
+        fav = session.exec(
+            select(Favorite).where(
+                Favorite.user_id == current_user.id,
+                Favorite.event_id == event_id
+            )
+        ).first()
+        if fav:
+            session.delete(fav)
+            session.commit()
+        return
+    except Exception as e:
+        print(f"❌ Error unfavoriting event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            raise HTTPException(
+                status_code=500,
+                detail="Favorites table does not exist. Please create the table in the database."
+            )
+        raise HTTPException(status_code=500, detail=f"Error unfavoriting event: {str(e)}")
 
 # --- 12. Health Check ---
 @app.get("/", tags=["health"])

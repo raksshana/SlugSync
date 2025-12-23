@@ -7,10 +7,6 @@
 
 import SwiftUI
 
-extension Notification.Name {
-    static let favoritesChanged = Notification.Name("favoritesChanged")
-}
-
 struct FavoritesView: View {
     @State private var favoriteEvents: [Event] = []
     @State private var searchText: String = ""

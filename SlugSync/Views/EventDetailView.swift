@@ -10,7 +10,7 @@ import SwiftUI
 struct EventDetailView: View {
     let event: Event
     @Environment(\.presentationMode) var presentationMode
-    @State private var isFavorite: Bool = false
+    @ObservedObject private var eventService = EventService.shared
     @State private var showEditSheet: Bool = false
 
     // Check if current user owns this event
@@ -19,6 +19,10 @@ struct EventDetailView: View {
             return false
         }
         return event.owner_id == currentUser.id
+    }
+    
+    private var isFavorite: Bool {
+        eventService.favoriteIds.contains(event.id)
     }
 
     var body: some View {
@@ -223,9 +227,6 @@ struct EventDetailView: View {
             )
             .background(Color.black)
             .preferredColorScheme(.dark)
-            .onAppear {
-                loadFavoriteStatus()
-            }
             .sheet(isPresented: $showEditSheet) {
                 EditEventView(event: event)
             }
@@ -233,45 +234,20 @@ struct EventDetailView: View {
     }
     
     private func toggleFavorite() {
-        isFavorite.toggle()
-        saveFavoriteStatus()
-    }
-    
-    private func loadFavoriteStatus() {
-        // Check if this event is in favorites
-        if let data = UserDefaults.standard.data(forKey: "favoriteEvents"),
-           let favorites = try? JSONDecoder().decode([Event].self, from: data) {
-            isFavorite = favorites.contains { $0.id == event.id }
-        }
-    }
-    
-    private func saveFavoriteStatus() {
-        // Load current favorites
-        var favorites = loadFavorites()
-        
-        if isFavorite {
-            // Add to favorites if not already there
-            if !favorites.contains(where: { $0.id == event.id }) {
-                favorites.append(event)
+        Task {
+            do {
+                if isFavorite {
+                    try await eventService.unfavoriteEvent(id: event.id)
+                } else {
+                    try await eventService.favoriteEvent(id: event.id)
+                }
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Notification.Name("favoritesChanged"), object: nil)
+                }
+            } catch {
+                print("❌ Error toggling favorite: \(error)")
             }
-        } else {
-            // Remove from favorites
-            favorites.removeAll { $0.id == event.id }
         }
-        
-        // Save back to UserDefaults
-        if let encoded = try? JSONEncoder().encode(favorites) {
-            UserDefaults.standard.set(encoded, forKey: "favoriteEvents")
-            // Notify that favorites changed
-            NotificationCenter.default.post(name: .favoritesChanged, object: nil)
-        }
-    }
-    
-    private func loadFavorites() -> [Event] {
-        if let data = UserDefaults.standard.data(forKey: "favoriteEvents"),
-           let favorites = try? JSONDecoder().decode([Event].self, from: data) {
-            return favorites
-        }
-        return []
     }
 }

@@ -10,6 +10,7 @@ import Foundation
 
 extension Notification.Name {
     static let eventsUpdated = Notification.Name("eventsUpdated")
+    static let favoritesChanged = Notification.Name("favoritesChanged")
 }
 
 struct ContentView: View {
@@ -336,10 +337,14 @@ struct ContentView: View {
         }
         .onAppear {
             loadEvents()
+            loadFavorites()
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsUpdated)) { _ in
             print("🔔 Received eventsUpdated notification - refreshing events...")
             loadEvents()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favoritesChanged)) { _ in
+            loadFavorites()
         }
         .sheet(isPresented: $showProfile) {
             ProfileView()
@@ -379,6 +384,21 @@ struct ContentView: View {
                     self.isLoading = false
                 }
                 print("❌ Error loading events: \(error)")
+            }
+        }
+    }
+    
+    private func loadFavorites() {
+        guard UserService.shared.currentUser != nil else {
+            return
+        }
+        
+        Task {
+            do {
+                _ = try await eventService.fetchFavorites()
+                print("✅ Favorites loaded successfully")
+            } catch {
+                print("⚠️ Error loading favorites: \(error)")
             }
         }
     }
