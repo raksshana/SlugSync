@@ -39,23 +39,56 @@ struct EditEventView: View {
 
         // Parse dates from ISO 8601 strings
         let formatter = ISO8601DateFormatter()
-        if let startDate = formatter.date(from: event.starts_at) {
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        // Try parsing with fractional seconds first, then without
+        var startDate: Date?
+        if let parsed = formatter.date(from: event.starts_at) {
+            startDate = parsed
+        } else {
+            // Try without fractional seconds
+            let simpleFormatter = ISO8601DateFormatter()
+            simpleFormatter.formatOptions = [.withInternetDateTime]
+            startDate = simpleFormatter.date(from: event.starts_at)
+        }
+        
+        if let startDate = startDate {
             _eventStartDate = State(initialValue: startDate)
             _eventTime = State(initialValue: startDate)
+            
+            // Check if it's an all-day event (time is midnight)
+            let calendar = Calendar.current
+            let hour = calendar.component(.hour, from: startDate)
+            let minute = calendar.component(.minute, from: startDate)
+            _isAllDay = State(initialValue: hour == 0 && minute == 0)
         } else {
             _eventStartDate = State(initialValue: Date())
             _eventTime = State(initialValue: Date())
+            _isAllDay = State(initialValue: false)
         }
 
-        if let endsAt = event.ends_at, let endDate = formatter.date(from: endsAt) {
+        // Parse end date
+        var endDate: Date?
+        if let endsAt = event.ends_at {
+            if let parsed = formatter.date(from: endsAt) {
+                endDate = parsed
+            } else {
+                // Try without fractional seconds
+                let simpleFormatter = ISO8601DateFormatter()
+                simpleFormatter.formatOptions = [.withInternetDateTime]
+                endDate = simpleFormatter.date(from: endsAt)
+            }
+        }
+        
+        if let endDate = endDate, let startDate = startDate {
             _eventEndDate = State(initialValue: endDate)
             // Check if it's multi-day
             let calendar = Calendar.current
-            if let startDate = formatter.date(from: event.starts_at) {
-                _isMultiDay = State(initialValue: !calendar.isDate(startDate, inSameDayAs: endDate))
-            } else {
-                _isMultiDay = State(initialValue: false)
-            }
+            _isMultiDay = State(initialValue: !calendar.isDate(startDate, inSameDayAs: endDate))
+        } else if let startDate = startDate {
+            // If no end date, set it to 1 hour after start
+            _eventEndDate = State(initialValue: startDate.addingTimeInterval(3600))
+            _isMultiDay = State(initialValue: false)
         } else {
             _eventEndDate = State(initialValue: Date())
             _isMultiDay = State(initialValue: false)
@@ -64,141 +97,232 @@ struct EditEventView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 25) {
-                    // Header
-                    HStack {
-                        Text("Edit Event")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color(red: 0.0, green: 0.2, blue: 0.4))
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
+            VStack(spacing: 0) {
+                // Header (sticky)
+                HStack {
+                    Text("Edit Event")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 70)
+                .padding(.bottom, 15)
+                .background(Color.black)
+                
+                ScrollView {
+                    VStack(spacing: 25) {
+                        VStack(spacing: 20) {
+                            // Organizer/Club Name
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Organizer/Club Name")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ZStack(alignment: .leading) {
+                                    if organizerName.isEmpty {
+                                        Text("Enter organizer or club name")
+                                            .foregroundColor(.white.opacity(0.6))
+                                            .padding(.horizontal, 15)
+                                    }
+                                    TextField("", text: $organizerName)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                }
+                                .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                                .cornerRadius(10)
+                            }
+                            
+                            // Event Name
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Event Name")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ZStack(alignment: .leading) {
+                                    if eventName.isEmpty {
+                                        Text("Enter event name")
+                                            .foregroundColor(.white.opacity(0.6))
+                                            .padding(.horizontal, 15)
+                                    }
+                                    TextField("", text: $eventName)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                }
+                                .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                                .cornerRadius(10)
+                            }
 
-                    VStack(spacing: 20) {
-                        // Organizer/Club Name
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Organizer/Club Name")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter organizer or club name", text: $organizerName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
+                            // Event Description
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Description")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ZStack(alignment: .leading) {
+                                    if eventDescription.isEmpty {
+                                        Text("Enter event description")
+                                            .foregroundColor(.white.opacity(0.6))
+                                            .padding(.horizontal, 15)
+                                    }
+                                    TextField("", text: $eventDescription)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                }
+                                .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                                .cornerRadius(10)
+                            }
 
-                        // Event Name
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Event Name")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event name", text: $eventName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
+                            // Location
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Location")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ZStack(alignment: .leading) {
+                                    if location.isEmpty {
+                                        Text("Enter event location")
+                                            .foregroundColor(.white.opacity(0.6))
+                                            .padding(.horizontal, 15)
+                                    }
+                                    TextField("", text: $location)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                }
+                                .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                                .cornerRadius(10)
+                            }
 
-                        // Event Description
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Description")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event description", text: $eventDescription)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
-
-                        // Location
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Location")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            TextField("Enter event location", text: $location)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                        }
-
-                        // Category Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Category")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            Picker("Category", selection: $selectedCategory) {
-                                ForEach(categories, id: \.self) { category in
-                                    Text(category).tag(category)
+                            // Category Selection
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Category")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(categories, id: \.self) { category in
+                                            Button(action: {
+                                                selectedCategory = category
+                                            }) {
+                                                Text(category)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(.white)
+                                                    .padding(.horizontal, 16)
+                                                    .padding(.vertical, 8)
+                                                    .background(
+                                                        Group {
+                                                            if selectedCategory == category {
+                                                                LinearGradient(
+                                                                    gradient: Gradient(colors: [
+                                                                        Color(red: 0.3, green: 0.7, blue: 1.0), // Light blue
+                                                                        Color(red: 1.0, green: 0.9, blue: 0.0)  // Bright yellow
+                                                                    ]),
+                                                                    startPoint: .leading,
+                                                                    endPoint: .trailing
+                                                                )
+                                                            } else {
+                                                                Color(red: 0.0, green: 0.2, blue: 0.4) // Dark blue
+                                                            }
+                                                        }
+                                                    )
+                                                    .cornerRadius(20)
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                            .pickerStyle(SegmentedPickerStyle())
+
+                            // Multi-Day Toggle
+                            HStack {
+                                Text("Multi-Day Event")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Toggle("", isOn: $isMultiDay)
+                                    .tint(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue when on
+                            }
+
+                            if isMultiDay {
+                                // Start Date
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Start Date")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    DatePicker("Event Start Date", selection: $eventStartDate, displayedComponents: .date)
+                                        .datePickerStyle(CompactDatePickerStyle())
+                                        .colorScheme(.dark)
+                                        .accentColor(.white)
+                                }
+
+                                // End Date
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("End Date")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    DatePicker("Event End Date", selection: $eventEndDate, displayedComponents: .date)
+                                        .datePickerStyle(CompactDatePickerStyle())
+                                        .colorScheme(.dark)
+                                        .accentColor(.white)
+                                }
+                            } else {
+                                // Single Date Selection
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Date")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    DatePicker("Event Date", selection: $eventStartDate, displayedComponents: .date)
+                                        .datePickerStyle(CompactDatePickerStyle())
+                                        .colorScheme(.dark)
+                                        .accentColor(.white)
+                                }
+                            }
+
+                            // All Day Toggle
+                            HStack {
+                                Text("All Day Event")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Toggle("", isOn: $isAllDay)
+                                    .tint(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue when on
+                            }
+
+                            // Time Selection (only if not all day)
+                            if !isAllDay {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Time")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                    DatePicker("Event Time", selection: $eventTime, displayedComponents: .hourAndMinute)
+                                        .datePickerStyle(CompactDatePickerStyle())
+                                        .colorScheme(.dark)
+                                        .accentColor(.white)
+                                }
+                            }
+
                         }
+                        .padding(.horizontal, 20)
 
-                        // Multi-Day Toggle
-                        Toggle("Multi-Day Event", isOn: $isMultiDay)
-                            .font(.headline)
-
-                        if isMultiDay {
-                            // Start Date
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Start Date")
+                        // Update Event Button
+                        Button(action: {
+                            updateEvent()
+                        }) {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                Text("Update Event")
                                     .font(.headline)
-                                    .foregroundColor(.primary)
-                                DatePicker("Event Start Date", selection: $eventStartDate, displayedComponents: .date)
-                                    .datePickerStyle(CompactDatePickerStyle())
+                                    .fontWeight(.semibold)
                             }
-
-                            // End Date
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("End Date")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                DatePicker("Event End Date", selection: $eventEndDate, displayedComponents: .date)
-                                    .datePickerStyle(CompactDatePickerStyle())
-                            }
-                        } else {
-                            // Single Date Selection
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Date")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                DatePicker("Event Date", selection: $eventStartDate, displayedComponents: .date)
-                                    .datePickerStyle(CompactDatePickerStyle())
-                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                            .cornerRadius(12)
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
 
-                        // All Day Toggle
-                        Toggle("All Day Event", isOn: $isAllDay)
-                            .font(.headline)
-
-                        // Time Selection (only if not all day)
-                        if !isAllDay {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Time")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                DatePicker("Event Time", selection: $eventTime, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(CompactDatePickerStyle())
-                            }
-                        }
-
+                        Spacer(minLength: 50)
                     }
-                    .padding(.horizontal)
-
-                    // Update Event Button
-                    Button(action: {
-                        updateEvent()
-                    }) {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                            Text("Update Event")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(red: 0.0, green: 0.2, blue: 0.4))
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
-
-                    Spacer(minLength: 50)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -206,17 +330,10 @@ struct EditEventView: View {
                 leading: Button("Cancel") {
                     presentationMode.wrappedValue.dismiss()
                 }
+                .foregroundColor(.white)
             )
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 1.0, green: 0.8, blue: 0.0),
-                        Color(red: 0.0, green: 0.3, blue: 0.6)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
+            .background(Color.black)
+            .ignoresSafeArea()
             .alert("Success", isPresented: $showSuccessAlert) {
                 Button("OK") {
                     presentationMode.wrappedValue.dismiss()

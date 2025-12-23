@@ -650,7 +650,48 @@ def health_check():
         "message": "SlugSync API is running",
         "version": "1.0.0"
     }
-# --- 13. Debug Endpoint ---
+# --- 13. Cleanup Endpoint ---
+@app.post("/admin/cleanup-stale-favorites", tags=["admin"])
+async def cleanup_stale_favorites(
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    """
+    Clean up favorites that point to deleted events (admin only).
+    This removes orphaned favorites where the event_id no longer exists in the eventmodel table.
+    Call: POST https://your-backend.onrender.com/admin/cleanup-stale-favorites
+    (Requires admin authentication)
+    """
+    try:
+        with engine.connect() as conn:
+            # Delete favorites where the event_id doesn't exist in eventmodel
+            # Using LEFT JOIN approach which is more reliable
+            result = conn.execute(text("""
+                DELETE FROM favorite
+                WHERE event_id NOT IN (SELECT id FROM eventmodel)
+            """))
+            deleted_count = result.rowcount
+            conn.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Cleaned up {deleted_count} stale favorites",
+                "deleted_count": deleted_count
+            }
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check if it's a "table doesn't exist" error
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            return {
+                "status": "info",
+                "message": "Favorites table does not exist. No cleanup needed."
+            }
+        return {
+            "status": "error",
+            "message": f"Error cleaning up favorites: {str(e)}"
+        }
+
+# --- 14. Debug Endpoint ---
 @app.get("/debug/user-info", tags=["debug"])
 async def debug_user_info(current_user: User = Depends(get_current_user)):
     """Debug: Check current user's information"""
