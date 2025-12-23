@@ -668,14 +668,24 @@ def list_favorites(
     current_user: User = Depends(get_current_user)
 ):
     """List the current user's favorited events."""
-    statement = (
-        select(EventModel)
-        .join(Favorite, Favorite.event_id == EventModel.id)
-        .where(Favorite.user_id == current_user.id)
-    )
-    events = session.exec(statement).all()
-    events.sort(key=lambda e: e.starts_at, reverse=True)
-    return [EventOut.model_validate(ev) for ev in events]
+    try:
+        statement = (
+            select(EventModel)
+            .join(Favorite, Favorite.event_id == EventModel.id)
+            .where(Favorite.user_id == current_user.id)
+        )
+        events = session.exec(statement).all()
+        events.sort(key=lambda e: e.starts_at, reverse=True)
+        return [EventOut.model_validate(ev) for ev in events]
+    except Exception as e:
+        print(f"❌ Error fetching favorites: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # If table doesn't exist, return empty list instead of crashing
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            print("⚠️ Favorite table doesn't exist yet. Returning empty list.")
+            return []
+        raise HTTPException(status_code=500, detail=f"Error fetching favorites: {str(e)}")
 
 @app.post("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
 def favorite_event(
@@ -728,6 +738,32 @@ def health_check():
         "message": "SlugSync API is running",
         "version": "1.0.0"
     }
+
+@app.get("/health/favorites", tags=["health"])
+def health_check_favorites(session: Session = Depends(get_session)):
+    """Check if favorites endpoints are available"""
+    try:
+        # Try to query the favorite table to see if it exists
+        result = session.exec(select(Favorite).limit(1)).first()
+        return {
+            "status": "ok",
+            "favorites_table_exists": True,
+            "message": "Favorites table exists and is accessible"
+        }
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            return {
+                "status": "error",
+                "favorites_table_exists": False,
+                "message": "Favorites table does not exist. Run create_db_and_tables() or create the table manually.",
+                "error": str(e)
+            }
+        return {
+            "status": "error",
+            "favorites_table_exists": "unknown",
+            "message": f"Error checking favorites table: {str(e)}"
+        }
 # --- 13. Cleanup Endpoint ---
 @app.post("/admin/cleanup-stale-favorites", tags=["admin"])
 async def cleanup_stale_favorites(

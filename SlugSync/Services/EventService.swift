@@ -268,13 +268,17 @@ class EventService: ObservableObject {
         }
 
         if httpResponse.statusCode == 404 {
-            print("⚠️ Favorites endpoint not found (404). Backend may not be deployed yet. Returning empty favorites.")
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("⚠️ Favorites endpoint not found (404). URL: \(url.absoluteString)")
+            print("⚠️ Response body: \(responseString)")
+            print("⚠️ Backend may not be deployed yet or table doesn't exist. Returning empty favorites.")
             await MainActor.run {
                 self.favoriteIds = []
             }
             return []
         } else if httpResponse.statusCode != 200 {
             let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("❌ Favorites endpoint error: Status \(httpResponse.statusCode), Response: \(responseString)")
             throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: responseString])
         }
 
