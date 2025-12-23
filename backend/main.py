@@ -456,10 +456,16 @@ def list_events(
     """List all events with optional filtering"""
     statement = select(EventModel)
 
-    # Filter out past events by default
+    # Filter out past events by default - use ends_at so events disappear after they finish
     if not include_past:
         from datetime import timezone
-        statement = statement.where(EventModel.starts_at >= datetime.now(timezone.utc))
+        now = datetime.now(timezone.utc)
+        # Keep events that haven't ended yet (ends_at is in the future or NULL)
+        # Use COALESCE to fall back to starts_at if ends_at is NULL
+        from sqlalchemy import func
+        statement = statement.where(
+            func.coalesce(EventModel.ends_at, EventModel.starts_at) >= now
+        )
 
     # Filter by start date if provided
     if start_date:
