@@ -233,6 +233,45 @@ struct EditEventView: View {
     }
 
     private func updateEvent() {
+        // Validate inputs
+        guard !eventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter an event name"
+            showErrorAlert = true
+            return
+        }
+
+        guard !location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter a location"
+            showErrorAlert = true
+            return
+        }
+
+        // Validate dates for multi-day events
+        if isMultiDay && eventEndDate < eventStartDate {
+            errorMessage = "End date must be after start date"
+            showErrorAlert = true
+            return
+        }
+
+        // Validate field lengths
+        guard eventName.count <= 120 else {
+            errorMessage = "Event name must be 120 characters or less"
+            showErrorAlert = true
+            return
+        }
+
+        guard location.count <= 160 else {
+            errorMessage = "Location must be 160 characters or less"
+            showErrorAlert = true
+            return
+        }
+
+        if !eventDescription.isEmpty && eventDescription.count > 10000 {
+            errorMessage = "Description must be 10,000 characters or less"
+            showErrorAlert = true
+            return
+        }
+
         Task {
             do {
                 let tagsString = selectedCategory.lowercased()

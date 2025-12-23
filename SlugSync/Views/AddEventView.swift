@@ -18,7 +18,11 @@ struct AddEventView: View {
     @State private var selectedCategory: String = "Academic"
     @State private var isAllDay: Bool = false
     @State private var isMultiDay: Bool = false
-    
+    @State private var showError: Bool = false
+    @State private var errorMessage: String = ""
+    @State private var isCreating: Bool = false
+    @State private var showSuccess: Bool = false
+
     let categories = ["Academic", "Sports", "Social", "Clubs"]
     
     var body: some View {
@@ -225,18 +229,27 @@ struct AddEventView: View {
                         createEvent()
                     }) {
                         HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                            Text("Add Event")
-                                .font(.headline)
-                                .fontWeight(.semibold)
+                            if isCreating {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                Text("Creating...")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title2)
+                                Text("Add Event")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
+                        .background(isCreating ? Color.gray : Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
                         .cornerRadius(12)
                     }
+                    .disabled(isCreating)
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     
@@ -247,11 +260,63 @@ struct AddEventView: View {
             .navigationBarHidden(true)
             .background(Color.black)
             .ignoresSafeArea()
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .alert("Success!", isPresented: $showSuccess) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Event created successfully!")
+            }
         }
     }
     
     private func createEvent() {
+        // Validate inputs
+        guard !eventName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter an event name"
+            showError = true
+            return
+        }
+
+        guard !location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter a location"
+            showError = true
+            return
+        }
+
+        // Validate dates for multi-day events
+        if isMultiDay && eventEndDate < eventStartDate {
+            errorMessage = "End date must be after start date"
+            showError = true
+            return
+        }
+
+        // Validate that event name is reasonable length
+        guard eventName.count <= 120 else {
+            errorMessage = "Event name must be 120 characters or less"
+            showError = true
+            return
+        }
+
+        // Validate location length
+        guard location.count <= 160 else {
+            errorMessage = "Location must be 160 characters or less"
+            showError = true
+            return
+        }
+
+        // Validate description length if provided
+        if !eventDescription.isEmpty && eventDescription.count > 10000 {
+            errorMessage = "Description must be 10,000 characters or less"
+            showError = true
+            return
+        }
+
         Task {
+            isCreating = true
             do {
                 // Create API event - simplified for testing
                 // Convert tags array to comma-separated string for backend
@@ -316,29 +381,56 @@ struct AddEventView: View {
                 // Send to backend
                 let createdEvent = try await EventService.shared.createEvent(apiEvent)
                 print("Event created successfully: \(createdEvent)")
-                
-                // Clear form
-                eventName = ""
-                organizerName = ""
-                eventDescription = ""
-                location = ""
-                selectedCategory = "Academic"
-                isMultiDay = false
-                isAllDay = false
-                eventStartDate = Date()
-                eventEndDate = Date()
-                eventTime = Date()
-                
-                // Show success message
-                print("✅ Event created and form cleared!")
-                
-                // Notify other views to refresh
-                NotificationCenter.default.post(name: .eventsUpdated, object: nil)
-                
+
+                await MainActor.run {
+                    isCreating = false
+
+                    // Clear form
+                    eventName = ""
+                    organizerName = ""
+                    eventDescription = ""
+                    location = ""
+                    selectedCategory = "Academic"
+                    isMultiDay = false
+                    isAllDay = false
+                    eventStartDate = Date()
+                    eventEndDate = Date()
+                    eventTime = Date()
+
+                    // Show success message
+                    showSuccess = true
+                    print("✅ Event created and form cleared!")
+
+                    // Notify other views to refresh
+                    NotificationCenter.default.post(name: .eventsUpdated, object: nil)
+                }
+
             } catch {
-                print("Error creating event: \(error)")
-                // TODO: Show error message
+                await MainActor.run {
+                    isCreating = false
+                    errorMessage = getFriendlyErrorMessage(error)
+                    showError = true
+                }
+                print("❌ Error creating event: \(error)")
             }
+        }
+    }
+
+    private func getFriendlyErrorMessage(_ error: Error) -> String {
+        let errorDescription = error.localizedDescription.lowercased()
+
+        if errorDescription.contains("not authorized") || errorDescription.contains("only event hosts") {
+            return "Only event hosts can create events. Please update your profile to become a host."
+        } else if errorDescription.contains("network") || errorDescription.contains("internet") {
+            return "No internet connection. Please check your network and try again."
+        } else if errorDescription.contains("timeout") || errorDescription.contains("timed out") {
+            return "The request took too long. Please try again."
+        } else if errorDescription.contains("401") || errorDescription.contains("unauthorized") {
+            return "You must be logged in to create events. Please log in and try again."
+        } else if errorDescription.contains("500") || errorDescription.contains("server") {
+            return "Server error. Please try again in a few moments."
+        } else {
+            return "Failed to create event. Please check your connection and try again."
         }
     }
     

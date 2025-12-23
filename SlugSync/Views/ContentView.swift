@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var filterStartDate: Date = Date()
     @State private var filterEndDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
     @State private var isDateFilterActive: Bool = false
+    @State private var errorMessage: String?
+    @State private var showError: Bool = false
     @StateObject private var eventService = EventService.shared
 
     let categories = ["All", "Sports", "Academic", "Social", "Clubs"]
@@ -306,13 +308,84 @@ struct ContentView: View {
                             .foregroundColor(.white)
                         Spacer()
                     }
+                } else if showError {
+                    // Error State
+                    VStack(spacing: 20) {
+                        Spacer()
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.yellow)
+                        Text("Oops!")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text(errorMessage ?? "Something went wrong")
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        Button(action: {
+                            showError = false
+                            errorMessage = nil
+                            loadEvents()
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Try Again")
+                            }
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 30)
+                            .padding(.vertical, 12)
+                            .background(Color(red: 0.0, green: 0.2, blue: 0.4))
+                            .cornerRadius(10)
+                        }
+                        Spacer()
+                    }
+                } else if filteredEvents.isEmpty {
+                    // Empty State
+                    VStack(spacing: 20) {
+                        Spacer()
+                        Image(systemName: getEmptyStateIcon())
+                            .font(.system(size: 60))
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(getEmptyStateTitle())
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text(getEmptyStateMessage())
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+
+                        if !searchText.isEmpty || selectedCategory != "All" || isDateFilterActive {
+                            Button(action: {
+                                searchText = ""
+                                selectedCategory = "All"
+                                isDateFilterActive = false
+                            }) {
+                                HStack {
+                                    Image(systemName: "xmark.circle")
+                                    Text("Clear Filters")
+                                }
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 30)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.0, green: 0.2, blue: 0.4))
+                                .cornerRadius(10)
+                            }
+                        }
+                        Spacer()
+                    }
                 } else {
                     ScrollView {
                         let columns = [
                             GridItem(.flexible(), spacing: 10),
                             GridItem(.flexible(), spacing: 10)
                         ]
-                        
+
                         LazyVGrid(columns: columns, spacing: 15) {
                             ForEach(filteredEvents) { event in
                                 EventCardView(event: event)
@@ -350,7 +423,7 @@ struct ContentView: View {
                     // Convert API events to our Event model
                     self.events = apiEvents.map { apiEvent in
                         print("  - Event: \(apiEvent.name), ID: \(apiEvent.id), Tags: \(apiEvent.tags ?? "none")")
-                        
+
                         return Event(
                             id: apiEvent.id, // Event model expects Int, not String
                             name: apiEvent.name,
@@ -366,14 +439,78 @@ struct ContentView: View {
                     }
                     print("✅ Events loaded and converted. Total: \(self.events.count)")
                     self.isLoading = false
+                    self.showError = false
+                    self.errorMessage = nil
                 }
             } catch {
                 await MainActor.run {
                     self.isLoading = false
+                    self.showError = true
+                    self.errorMessage = getFriendlyErrorMessage(error)
                 }
                 print("❌ Error loading events: \(error)")
             }
         }
     }
-    
+
+    private func getFriendlyErrorMessage(_ error: Error) -> String {
+        let errorDescription = error.localizedDescription.lowercased()
+
+        if errorDescription.contains("network") || errorDescription.contains("internet") {
+            return "No internet connection. Please check your network and try again."
+        } else if errorDescription.contains("timeout") || errorDescription.contains("timed out") {
+            return "The request took too long. The server might be waking up. Please try again."
+        } else if errorDescription.contains("404") || errorDescription.contains("not found") {
+            return "Could not find the events. Please try again later."
+        } else if errorDescription.contains("500") || errorDescription.contains("server") {
+            return "Server error. Please try again in a few moments."
+        } else if errorDescription.contains("unauthorized") || errorDescription.contains("401") {
+            return "Authentication failed. Please log in again."
+        } else {
+            return "Unable to load events. Please check your connection and try again."
+        }
+    }
+
+    private func getEmptyStateIcon() -> String {
+        if !searchText.isEmpty {
+            return "magnifyingglass"
+        } else if selectedCategory != "All" {
+            return "tray"
+        } else if isDateFilterActive {
+            return "calendar.badge.exclamationmark"
+        } else {
+            return "calendar"
+        }
+    }
+
+    private func getEmptyStateTitle() -> String {
+        if !searchText.isEmpty {
+            return "No Results Found"
+        } else if selectedCategory != "All" {
+            return "No \(selectedCategory) Events"
+        } else if isDateFilterActive {
+            return "No Events in Date Range"
+        } else if events.isEmpty {
+            return "No Events Yet"
+        } else {
+            return "No Upcoming Events"
+        }
+    }
+
+    private func getEmptyStateMessage() -> String {
+        if !searchText.isEmpty {
+            return "We couldn't find any events matching '\(searchText)'. Try a different search term."
+        } else if selectedCategory != "All" {
+            return "There are no \(selectedCategory.lowercased()) events scheduled right now. Check back later!"
+        } else if isDateFilterActive {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            return "No events found between \(formatter.string(from: filterStartDate)) and \(formatter.string(from: filterEndDate))."
+        } else if events.isEmpty {
+            return "Be the first to create an event! Check back soon for upcoming activities."
+        } else {
+            return "All events have ended. New events will appear here when they're created."
+        }
+    }
+
 }
