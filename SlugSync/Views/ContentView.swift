@@ -118,26 +118,28 @@ struct ContentView: View {
     }
     
     private func isEventInFuture(event: Event, today: Date, calendar: Calendar) -> Bool {
-        // Parse the event date from ISO8601 string (starts_at)
+        // Parse the event end date from ISO8601 string (ends_at)
+        // Events should only disappear after their end date/time has passed
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
+
+        // Use ends_at if available, otherwise fall back to starts_at
+        let dateString = event.ends_at ?? event.starts_at
+
         // Try ISO8601 format first
-        if let eventDate = isoFormatter.date(from: event.starts_at) {
-            let todayStart = calendar.startOfDay(for: today)
-            let eventStart = calendar.startOfDay(for: eventDate)
-            return eventStart >= todayStart
+        if let eventEndDate = isoFormatter.date(from: dateString) {
+            // Event is in future if its end date/time hasn't passed yet
+            return eventEndDate >= today
         }
-        
+
         // Fallback: try simple format
         let simpleFormatter = DateFormatter()
         simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        if let eventDate = simpleFormatter.date(from: event.starts_at) {
-            let todayStart = calendar.startOfDay(for: today)
-            let eventStart = calendar.startOfDay(for: eventDate)
-            return eventStart >= todayStart
+        if let eventEndDate = simpleFormatter.date(from: dateString) {
+            // Event is in future if its end date/time hasn't passed yet
+            return eventEndDate >= today
         }
-        
+
         // If parsing fails, show the event (better to show than hide)
         return true
     }
