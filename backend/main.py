@@ -124,6 +124,13 @@ class EventUpdate(SQLModel):
     host: Optional[str] = Field(None, max_length=300)
     tags: Optional[str] = Field(None)
 
+# --- 5b. Favorite Model ---
+class Favorite(SQLModel, table=True):
+    """Join table mapping a user to favorited events."""
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    event_id: int = Field(foreign_key="eventmodel.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # --- 6. Database Setup ---
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
@@ -642,10 +649,75 @@ def delete_event(
             detail="Not authorized to delete this event"
         )
 
+    # Delete associated favorites first (cascade delete)
+    favorites = session.exec(
+        select(Favorite).where(Favorite.event_id == event_id)
+    ).all()
+    for fav in favorites:
+        session.delete(fav)
+
     session.delete(event)
     session.commit()
     # Return None for 204 No Content (no response body)
     return None
+
+# --- 11b. Favorites Endpoints ---
+@app.get("/favorites/", response_model=List[EventOut], tags=["favorites"])
+def list_favorites(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """List the current user's favorited events."""
+    statement = (
+        select(EventModel)
+        .join(Favorite, Favorite.event_id == EventModel.id)
+        .where(Favorite.user_id == current_user.id)
+    )
+    events = session.exec(statement).all()
+    events.sort(key=lambda e: e.starts_at, reverse=True)
+    return [EventOut.model_validate(ev) for ev in events]
+
+@app.post("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
+def favorite_event(
+    event_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Favorite an event for the current user (idempotent)."""
+    event = session.get(EventModel, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    existing = session.exec(
+        select(Favorite).where(
+            Favorite.user_id == current_user.id,
+            Favorite.event_id == event_id
+        )
+    ).first()
+    if existing:
+        return
+
+    session.add(Favorite(user_id=current_user.id, event_id=event_id))
+    session.commit()
+    return
+
+@app.delete("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
+def unfavorite_event(
+    event_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Unfavorite an event for the current user (idempotent)."""
+    fav = session.exec(
+        select(Favorite).where(
+            Favorite.user_id == current_user.id,
+            Favorite.event_id == event_id
+        )
+    ).first()
+    if fav:
+        session.delete(fav)
+        session.commit()
+    return
 
 # --- 12. Health Check ---
 @app.get("/", tags=["health"])
