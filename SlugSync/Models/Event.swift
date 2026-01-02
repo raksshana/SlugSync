@@ -70,7 +70,7 @@ struct Event: Codable, Identifiable, Hashable {
         guard let startDate = startDate else { return starts_at }
         
         let displayFormatter = DateFormatter()
-        displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
+        displayFormatter.dateFormat = "MMM dd"
         
         // Check if it's a multi-day event
         if let endsAt = ends_at {
