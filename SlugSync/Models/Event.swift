@@ -80,20 +80,50 @@ struct Event: Codable, Identifiable, Hashable {
     var time: String {
         // Format starts_at time for display
         let formatter = ISO8601DateFormatter()
-        guard let startDate = formatter.date(from: starts_at) else { 
+        guard let startDate = formatter.date(from: starts_at) else {
             // Fallback to simple string parsing
             let simpleFormatter = DateFormatter()
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
             guard let fallbackDate = simpleFormatter.date(from: starts_at) else { return "" }
-            
+
+            // Check if this is an all-day event (midnight to 23:59)
+            let calendar = Calendar.current
+            let hour = calendar.component(.hour, from: fallbackDate)
+            let minute = calendar.component(.minute, from: fallbackDate)
+
+            if hour == 0 && minute == 0 {
+                if let endsAt = ends_at, let endDate = simpleFormatter.date(from: endsAt) {
+                    let endHour = calendar.component(.hour, from: endDate)
+                    let endMinute = calendar.component(.minute, from: endDate)
+                    if endHour == 23 && endMinute == 59 {
+                        return "All Day"
+                    }
+                }
+            }
+
             let displayFormatter = DateFormatter()
             displayFormatter.dateFormat = "h:mm a"
             return displayFormatter.string(from: fallbackDate)
         }
-        
+
+        // Check if this is an all-day event (midnight to 23:59)
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: startDate)
+        let minute = calendar.component(.minute, from: startDate)
+
+        if hour == 0 && minute == 0 {
+            if let endsAt = ends_at, let endDate = formatter.date(from: endsAt) {
+                let endHour = calendar.component(.hour, from: endDate)
+                let endMinute = calendar.component(.minute, from: endDate)
+                if endHour == 23 && endMinute == 59 {
+                    return "All Day"
+                }
+            }
+        }
+
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "h:mm a"
-        
+
         if let endsAt = ends_at, let endDate = formatter.date(from: endsAt) {
             let startTime = displayFormatter.string(from: startDate)
             let endTime = displayFormatter.string(from: endDate)
