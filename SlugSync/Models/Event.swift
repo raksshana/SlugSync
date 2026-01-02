@@ -90,17 +90,28 @@ struct Event: Codable, Identifiable, Hashable {
                 // Check if start and end are on the same calendar day
                 let isSameDay = calendar.isDate(startDate, inSameDayAs: endDate)
 
+                // Debug logging
+                print("📅 Event date check:")
+                print("  Start: \(startDate)")
+                print("  End: \(endDate)")
+                print("  Same day? \(isSameDay)")
+
                 // Only show date range for multi-day events
                 if !isSameDay {
                     let startString = displayFormatter.string(from: startDate)
                     let endString = displayFormatter.string(from: endDate)
+                    print("  ✅ Showing range: \(startString) - \(endString)")
                     return "\(startString) - \(endString)"
+                } else {
+                    print("  ✅ Same day, showing only start date")
                 }
             }
         }
 
         // Single-day event: only show start date
-        return displayFormatter.string(from: startDate)
+        let result = displayFormatter.string(from: startDate)
+        print("  📅 Final date display: \(result)")
+        return result
     }
     var time: String {
         // Format starts_at time for display
