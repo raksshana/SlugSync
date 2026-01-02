@@ -70,10 +70,16 @@ struct Event: Codable, Identifiable, Hashable {
         guard let startDate = startDate else { return starts_at }
 
         let displayFormatter = DateFormatter()
+<<<<<<< HEAD
         displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
 
         // Always just show the start date for single-day events
         // Only show date range for multi-day events
+=======
+        displayFormatter.dateFormat = "MMM dd"
+        
+        // Check if it's a multi-day event
+>>>>>>> 967a703a2a84eee296c90d0d7a87b591a725c418
         if let endsAt = ends_at {
             var endDate: Date?
             if let parsed = formatter.date(from: endsAt) {

@@ -16,7 +16,8 @@ struct EditEventView: View {
     @State private var eventDescription: String
     @State private var eventStartDate: Date
     @State private var eventEndDate: Date
-    @State private var eventTime: Date
+    @State private var eventStartTime: Date
+    @State private var eventEndTime: Date
     @State private var location: String
     @State private var selectedCategory: String
     @State private var isAllDay: Bool = false
@@ -54,7 +55,7 @@ struct EditEventView: View {
         
         if let startDate = startDate {
             _eventStartDate = State(initialValue: startDate)
-            _eventTime = State(initialValue: startDate)
+            _eventStartTime = State(initialValue: startDate)
             
             // Check if it's an all-day event (time is midnight)
             let calendar = Calendar.current
@@ -63,7 +64,7 @@ struct EditEventView: View {
             _isAllDay = State(initialValue: hour == 0 && minute == 0)
         } else {
             _eventStartDate = State(initialValue: Date())
-            _eventTime = State(initialValue: Date())
+            _eventStartTime = State(initialValue: Date())
             _isAllDay = State(initialValue: false)
         }
 
@@ -82,15 +83,20 @@ struct EditEventView: View {
         
         if let endDate = endDate, let startDate = startDate {
             _eventEndDate = State(initialValue: endDate)
+            _eventEndTime = State(initialValue: endDate)
             // Check if it's multi-day
             let calendar = Calendar.current
             _isMultiDay = State(initialValue: !calendar.isDate(startDate, inSameDayAs: endDate))
         } else if let startDate = startDate {
             // If no end date, set it to 1 hour after start
-            _eventEndDate = State(initialValue: startDate.addingTimeInterval(3600))
+            let endTime = startDate.addingTimeInterval(3600)
+            _eventEndDate = State(initialValue: startDate)
+            _eventEndTime = State(initialValue: endTime)
             _isMultiDay = State(initialValue: false)
         } else {
+            let defaultEndTime = Date().addingTimeInterval(3600)
             _eventEndDate = State(initialValue: Date())
+            _eventEndTime = State(initialValue: defaultEndTime)
             _isMultiDay = State(initialValue: false)
         }
     }
@@ -287,14 +293,33 @@ struct EditEventView: View {
 
                             // Time Selection (only if not all day)
                             if !isAllDay {
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 12) {
                                     Text("Time")
                                         .font(.headline)
+                                        .fontWeight(.bold)
                                         .foregroundColor(.white)
-                                    DatePicker("Event Time", selection: $eventTime, displayedComponents: .hourAndMinute)
-                                        .datePickerStyle(CompactDatePickerStyle())
-                                        .colorScheme(.dark)
-                                        .accentColor(.white)
+                                    
+                                    HStack {
+                                        Text("Start Time")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        DatePicker("", selection: $eventStartTime, displayedComponents: .hourAndMinute)
+                                            .datePickerStyle(CompactDatePickerStyle())
+                                            .colorScheme(.dark)
+                                            .accentColor(.white)
+                                    }
+                                    
+                                    HStack {
+                                        Text("End Time")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        DatePicker("", selection: $eventEndTime, displayedComponents: .hourAndMinute)
+                                            .datePickerStyle(CompactDatePickerStyle())
+                                            .colorScheme(.dark)
+                                            .accentColor(.white)
+                                    }
                                 }
                             }
 
@@ -366,6 +391,13 @@ struct EditEventView: View {
         // Validate dates for multi-day events
         if isMultiDay && eventEndDate < eventStartDate {
             errorMessage = "End date must be after start date"
+            showErrorAlert = true
+            return
+        }
+
+        // Validate times for single-day events
+        if !isMultiDay && !isAllDay && eventEndTime <= eventStartTime {
+            errorMessage = "End time must be after start time for single-day events"
             showErrorAlert = true
             return
         }
@@ -451,37 +483,15 @@ struct EditEventView: View {
                         }
                     }
                 } else {
-                    // Non-all-day events: use the selected time
-                    startDateString = formatISO8601Date(eventStartDate, eventTime)
+                    // Non-all-day events: use the selected start and end times
+                    startDateString = formatISO8601Date(eventStartDate, eventStartTime)
 
                     if isMultiDay {
-                        // Multi-day timed event: use same time on end date
-                        endDateString = formatISO8601Date(eventEndDate, eventTime)
+                        // Multi-day timed event: use start time on start date, end time on end date
+                        endDateString = formatISO8601Date(eventEndDate, eventEndTime)
                     } else {
-                        // Single-day timed event: add 1 hour to start time
-                        let dateComponents = calendar.dateComponents([.year, .month, .day], from: eventStartDate)
-                        let timeComponents = calendar.dateComponents([.hour, .minute], from: eventTime)
-                        var combinedComponents = DateComponents()
-                        combinedComponents.year = dateComponents.year
-                        combinedComponents.month = dateComponents.month
-                        combinedComponents.day = dateComponents.day
-                        combinedComponents.hour = timeComponents.hour
-                        combinedComponents.minute = timeComponents.minute
-                        if let combinedStartDate = calendar.date(from: combinedComponents) {
-                            let endDate = combinedStartDate.addingTimeInterval(3600)
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            endDateString = formatter.string(from: endDate)
-                        } else {
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            if let startDate = formatter.date(from: startDateString) {
-                                let endDate = startDate.addingTimeInterval(3600)
-                                endDateString = formatter.string(from: endDate)
-                            } else {
-                                endDateString = startDateString
-                            }
-                        }
+                        // Single-day timed event: use start time on start date, end time on same date
+                        endDateString = formatISO8601Date(eventStartDate, eventEndTime)
                     }
                 }
 
