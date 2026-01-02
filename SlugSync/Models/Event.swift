@@ -56,7 +56,7 @@ struct Event: Codable, Identifiable, Hashable {
         // Format starts_at for display
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
+
         var startDate: Date?
         if let parsed = formatter.date(from: starts_at) {
             startDate = parsed
@@ -66,13 +66,14 @@ struct Event: Codable, Identifiable, Hashable {
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
             startDate = simpleFormatter.date(from: starts_at)
         }
-        
+
         guard let startDate = startDate else { return starts_at }
-        
+
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
-        
-        // Check if it's a multi-day event
+
+        // Always just show the start date for single-day events
+        // Only show date range for multi-day events
         if let endsAt = ends_at {
             var endDate: Date?
             if let parsed = formatter.date(from: endsAt) {
@@ -89,7 +90,7 @@ struct Event: Codable, Identifiable, Hashable {
                 // Check if start and end are on the same calendar day
                 let isSameDay = calendar.isDate(startDate, inSameDayAs: endDate)
 
-                // Only show date range if events span multiple days
+                // Only show date range for multi-day events
                 if !isSameDay {
                     let startString = displayFormatter.string(from: startDate)
                     let endString = displayFormatter.string(from: endDate)
@@ -98,6 +99,7 @@ struct Event: Codable, Identifiable, Hashable {
             }
         }
 
+        // Single-day event: only show start date
         return displayFormatter.string(from: startDate)
     }
     var time: String {
