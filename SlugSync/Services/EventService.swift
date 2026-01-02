@@ -39,6 +39,8 @@ class EventService: ObservableObject {
     // Backend API base URL
     private let baseURL = "https://slugsync-1.onrender.com"
     
+    @Published private(set) var favoriteIds: Set<Int> = []
+    
     private init() {}
     
     // MARK: - Fetch Events
@@ -239,6 +241,114 @@ class EventService: ObservableObject {
         }
         
         print("✅ Event deleted successfully")
+    }
+    
+    // MARK: - Favorites
+    func fetchFavorites() async throws -> [EventOut] {
+        guard let url = URL(string: "\(baseURL)/favorites/") else {
+            throw NetworkError.invalidURL
+        }
+
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(
+                domain: "EventService",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "You must be logged in"]
+            )
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 404 {
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("⚠️ Favorites endpoint not found (404). URL: \(url.absoluteString)")
+            print("⚠️ Response body: \(responseString)")
+            print("⚠️ Backend may not be deployed yet or table doesn't exist. Returning empty favorites.")
+            await setFavoriteIds([])
+            return []
+        } else if httpResponse.statusCode != 200 {
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("❌ Favorites endpoint error: Status \(httpResponse.statusCode), Response: \(responseString)")
+            throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: responseString])
+        }
+
+        let events = try JSONDecoder().decode([EventOut].self, from: data)
+        await setFavoriteIds(Set(events.map { $0.id }))
+        return events
+    }
+
+    func favoriteEvent(id eventId: Int) async throws {
+        guard let url = URL(string: "\(baseURL)/events/\(eventId)/favorite") else {
+            throw NetworkError.invalidURL
+        }
+
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(
+                domain: "EventService",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "You must be logged in"]
+            )
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode != 204 {
+            throw NetworkError.invalidResponse
+        }
+
+        await setFavoriteIds(favoriteIds.union([eventId]))
+    }
+
+    func unfavoriteEvent(id eventId: Int) async throws {
+        guard let url = URL(string: "\(baseURL)/events/\(eventId)/favorite") else {
+            throw NetworkError.invalidURL
+        }
+
+        guard let accessToken = UserService.shared.accessToken else {
+            throw NSError(
+                domain: "EventService",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "You must be logged in"]
+            )
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NetworkError.invalidResponse
+        }
+        if httpResponse.statusCode != 204 {
+            throw NetworkError.invalidResponse
+        }
+
+        await setFavoriteIds(favoriteIds.subtracting([eventId]))
+    }
+    
+    @MainActor
+    private func setFavoriteIds(_ ids: Set<Int>) {
+        favoriteIds = ids
+    }
+    
+    @MainActor
+    func clearFavoritesCache() {
+        favoriteIds = []
     }
 }
 

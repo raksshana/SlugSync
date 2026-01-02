@@ -9,8 +9,12 @@ import SwiftUI
 
 struct EventCardView: View {
     let event: Event
-    @State private var isFavorite: Bool = false
+    @ObservedObject private var eventService = EventService.shared
     @State private var showDetails: Bool = false
+    
+    private var isFavorite: Bool {
+        eventService.favoriteIds.contains(event.id)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -150,17 +154,27 @@ struct EventCardView: View {
         .background(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue
         .cornerRadius(15)
         .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-        .onAppear {
-            loadFavoriteStatus()
-        }
         .sheet(isPresented: $showDetails) {
             EventDetailView(event: event)
         }
     }
     
     private func toggleFavorite() {
-        isFavorite.toggle()
-        saveFavoriteStatus()
+        Task {
+            do {
+                if isFavorite {
+                    try await eventService.unfavoriteEvent(id: event.id)
+                } else {
+                    try await eventService.favoriteEvent(id: event.id)
+                }
+                
+                await MainActor.run {
+                    NotificationCenter.default.post(name: Notification.Name("favoritesChanged"), object: nil)
+                }
+            } catch {
+                print("❌ Error toggling favorite: \(error)")
+            }
+        }
     }
     
     private func deleteEvent() {
@@ -176,7 +190,7 @@ struct EventCardView: View {
                     removeFavoriteIfExists()
 
                     // Notify other views to refresh
-                    NotificationCenter.default.post(name: .eventsUpdated, object: nil)
+                    NotificationCenter.default.post(name: Notification.Name("eventsUpdated"), object: nil)
                 }
 
             } catch {
@@ -186,58 +200,8 @@ struct EventCardView: View {
     }
 
     private func removeFavoriteIfExists() {
-        var favorites = loadFavorites()
-        let originalCount = favorites.count
-
-        // Remove the deleted event from favorites
-        favorites.removeAll { $0.id == event.id }
-
-        // Only update if something was actually removed
-        if favorites.count < originalCount {
-            if let encoded = try? JSONEncoder().encode(favorites) {
-                UserDefaults.standard.set(encoded, forKey: "favoriteEvents")
-                // Notify that favorites changed
-                NotificationCenter.default.post(name: .favoritesChanged, object: nil)
-                print("✅ Removed deleted event from favorites")
-            }
-        }
-    }
-    
-    private func loadFavoriteStatus() {
-        // Check if this event is in favorites
-        if let data = UserDefaults.standard.data(forKey: "favoriteEvents"),
-           let favorites = try? JSONDecoder().decode([Event].self, from: data) {
-            isFavorite = favorites.contains { $0.id == event.id }
-        }
-    }
-    
-    private func saveFavoriteStatus() {
-        // Load current favorites
-        var favorites = loadFavorites()
-        
-        if isFavorite {
-            // Add to favorites if not already there
-            if !favorites.contains(where: { $0.id == event.id }) {
-                favorites.append(event)
-            }
-        } else {
-            // Remove from favorites
-            favorites.removeAll { $0.id == event.id }
-        }
-        
-        // Save back to UserDefaults
-        if let encoded = try? JSONEncoder().encode(favorites) {
-            UserDefaults.standard.set(encoded, forKey: "favoriteEvents")
-            // Notify that favorites changed
-            NotificationCenter.default.post(name: .favoritesChanged, object: nil)
-        }
-    }
-    
-    private func loadFavorites() -> [Event] {
-        if let data = UserDefaults.standard.data(forKey: "favoriteEvents"),
-           let favorites = try? JSONDecoder().decode([Event].self, from: data) {
-            return favorites
-        }
-        return []
+        // When an event is deleted, the backend will handle cascade deletion of favorites
+        // Just notify that favorites might have changed
+        NotificationCenter.default.post(name: Notification.Name("favoritesChanged"), object: nil)
     }
 }

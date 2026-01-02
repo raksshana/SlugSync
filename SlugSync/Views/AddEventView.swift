@@ -140,7 +140,14 @@ struct AddEventView: View {
                                                 .background(
                                                     Group {
                                                         if selectedCategory == category {
-                                                            Color(red: 0.3, green: 0.7, blue: 1.0) // Light blue
+                                                            LinearGradient(
+                                                                gradient: Gradient(colors: [
+                                                                    Color(red: 0.3, green: 0.7, blue: 1.0), // Light blue
+                                                                    Color(red: 1.0, green: 0.9, blue: 0.0)  // Bright yellow
+                                                                ]),
+                                                                startPoint: .leading,
+                                                                endPoint: .trailing
+                                                            )
                                                         } else {
                                                             Color(red: 0.0, green: 0.2, blue: 0.4) // Dark blue
                                                         }

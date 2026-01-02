@@ -124,6 +124,13 @@ class EventUpdate(SQLModel):
     host: Optional[str] = Field(None, max_length=300)
     tags: Optional[str] = Field(None)
 
+# --- 5b. Favorite Model ---
+class Favorite(SQLModel, table=True):
+    """Join table mapping a user to favorited events."""
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    event_id: int = Field(foreign_key="eventmodel.id", primary_key=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # --- 6. Database Setup ---
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
@@ -642,10 +649,109 @@ def delete_event(
             detail="Not authorized to delete this event"
         )
 
+    # Delete associated favorites first (cascade delete)
+    favorites = session.exec(
+        select(Favorite).where(Favorite.event_id == event_id)
+    ).all()
+    for fav in favorites:
+        session.delete(fav)
+
     session.delete(event)
     session.commit()
     # Return None for 204 No Content (no response body)
     return None
+
+# --- 11b. Favorites Endpoints ---
+@app.get("/favorites/", response_model=List[EventOut], tags=["favorites"])
+def list_favorites(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """List the current user's favorited events."""
+    try:
+        statement = (
+            select(EventModel)
+            .join(Favorite, Favorite.event_id == EventModel.id)
+            .where(Favorite.user_id == current_user.id)
+        )
+        events = session.exec(statement).all()
+        events.sort(key=lambda e: e.starts_at, reverse=True)
+        return [EventOut.model_validate(ev) for ev in events]
+    except Exception as e:
+        print(f"❌ Error fetching favorites: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # If table doesn't exist, return empty list instead of crashing
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            print("⚠️ Favorite table doesn't exist yet. Returning empty list.")
+            return []
+        raise HTTPException(status_code=500, detail=f"Error fetching favorites: {str(e)}")
+
+@app.post("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
+def favorite_event(
+    event_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Favorite an event for the current user (idempotent)."""
+    try:
+        event = session.get(EventModel, event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        existing = session.exec(
+            select(Favorite).where(
+                Favorite.user_id == current_user.id,
+                Favorite.event_id == event_id
+            )
+        ).first()
+        if existing:
+            return
+
+        session.add(Favorite(user_id=current_user.id, event_id=event_id))
+        session.commit()
+        return
+    except Exception as e:
+        print(f"❌ Error favoriting event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            raise HTTPException(
+                status_code=500,
+                detail="Favorites table does not exist. Please create the table in the database."
+            )
+        raise HTTPException(status_code=500, detail=f"Error favoriting event: {str(e)}")
+
+@app.delete("/events/{event_id}/favorite", status_code=status.HTTP_204_NO_CONTENT, tags=["favorites"])
+def unfavorite_event(
+    event_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Unfavorite an event for the current user (idempotent)."""
+    try:
+        fav = session.exec(
+            select(Favorite).where(
+                Favorite.user_id == current_user.id,
+                Favorite.event_id == event_id
+            )
+        ).first()
+        if fav:
+            session.delete(fav)
+            session.commit()
+        return
+    except Exception as e:
+        print(f"❌ Error unfavoriting event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            raise HTTPException(
+                status_code=500,
+                detail="Favorites table does not exist. Please create the table in the database."
+            )
+        raise HTTPException(status_code=500, detail=f"Error unfavoriting event: {str(e)}")
 
 # --- 12. Health Check ---
 @app.get("/", tags=["health"])
@@ -656,7 +762,74 @@ def health_check():
         "message": "SlugSync API is running",
         "version": "1.0.0"
     }
-# --- 13. Debug Endpoint ---
+
+@app.get("/health/favorites", tags=["health"])
+def health_check_favorites(session: Session = Depends(get_session)):
+    """Check if favorites endpoints are available"""
+    try:
+        # Try to query the favorite table to see if it exists
+        result = session.exec(select(Favorite).limit(1)).first()
+        return {
+            "status": "ok",
+            "favorites_table_exists": True,
+            "message": "Favorites table exists and is accessible"
+        }
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            return {
+                "status": "error",
+                "favorites_table_exists": False,
+                "message": "Favorites table does not exist. Run create_db_and_tables() or create the table manually.",
+                "error": str(e)
+            }
+        return {
+            "status": "error",
+            "favorites_table_exists": "unknown",
+            "message": f"Error checking favorites table: {str(e)}"
+        }
+# --- 13. Cleanup Endpoint ---
+@app.post("/admin/cleanup-stale-favorites", tags=["admin"])
+async def cleanup_stale_favorites(
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session)
+):
+    """
+    Clean up favorites that point to deleted events (admin only).
+    This removes orphaned favorites where the event_id no longer exists in the eventmodel table.
+    Call: POST https://your-backend.onrender.com/admin/cleanup-stale-favorites
+    (Requires admin authentication)
+    """
+    try:
+        with engine.connect() as conn:
+            # Delete favorites where the event_id doesn't exist in eventmodel
+            # Using LEFT JOIN approach which is more reliable
+            result = conn.execute(text("""
+                DELETE FROM favorite
+                WHERE event_id NOT IN (SELECT id FROM eventmodel)
+            """))
+            deleted_count = result.rowcount
+            conn.commit()
+            
+            return {
+                "status": "success",
+                "message": f"Cleaned up {deleted_count} stale favorites",
+                "deleted_count": deleted_count
+            }
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check if it's a "table doesn't exist" error
+        if "does not exist" in error_msg or "no such table" in error_msg or "relation" in error_msg:
+            return {
+                "status": "info",
+                "message": "Favorites table does not exist. No cleanup needed."
+            }
+        return {
+            "status": "error",
+            "message": f"Error cleaning up favorites: {str(e)}"
+        }
+
+# --- 14. Debug Endpoint ---
 @app.get("/debug/user-info", tags=["debug"])
 async def debug_user_info(current_user: User = Depends(get_current_user)):
     """Debug: Check current user's information"""
