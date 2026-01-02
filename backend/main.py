@@ -676,7 +676,21 @@ def list_favorites(
         )
         events = session.exec(statement).all()
         events.sort(key=lambda e: e.starts_at, reverse=True)
-        return [EventOut.model_validate(ev) for ev in events]
+        return [
+            EventOut(
+                id=ev.id,
+                name=ev.name,
+                starts_at=ev.starts_at,
+                ends_at=ev.ends_at,
+                location=ev.location,
+                description=ev.description,
+                host=ev.host,
+                tags=ev.tags,
+                created_at=ev.created_at,
+                owner_id=ev.owner_id
+            )
+            for ev in events
+        ]
     except Exception as e:
         print(f"❌ Error fetching favorites: {str(e)}")
         import traceback
