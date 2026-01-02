@@ -82,24 +82,22 @@ struct Event: Codable, Identifiable, Hashable {
                 simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
                 endDate = simpleFormatter.date(from: endsAt)
             }
-            
+
             if let endDate = endDate {
                 let calendar = Calendar.current
-                // Normalize both dates to start of day for comparison
-                let startOfStartDay = calendar.startOfDay(for: startDate)
-                let startOfEndDay = calendar.startOfDay(for: endDate)
-                
-                // Check if start and end are on different days
-                if startOfStartDay != startOfEndDay {
-                    // For display, use the actual dates (not normalized)
+
+                // Check if start and end are on the same calendar day
+                let isSameDay = calendar.isDate(startDate, inSameDayAs: endDate)
+
+                // Only show date range if events span multiple days
+                if !isSameDay {
                     let startString = displayFormatter.string(from: startDate)
-                    // For multi-day events, show the end date (not the end datetime)
-                    let endString = displayFormatter.string(from: startOfEndDay)
+                    let endString = displayFormatter.string(from: endDate)
                     return "\(startString) - \(endString)"
                 }
             }
         }
-        
+
         return displayFormatter.string(from: startDate)
     }
     var time: String {
