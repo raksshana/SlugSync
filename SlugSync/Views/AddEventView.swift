@@ -330,36 +330,66 @@ struct AddEventView: View {
                 let tagsString = selectedCategory.lowercased()
                 
                 // Always include ends_at - if not provided, use starts_at + 1 hour
-                let startDateString = formatISO8601Date(eventStartDate, eventTime)
+                // For all-day events, use midnight (00:00) for the time
+                let calendar = Calendar.current
+                let timeToUse: Date
+                if isAllDay {
+                    // Set to exactly midnight (00:00:00)
+                    timeToUse = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: eventStartDate) ?? calendar.startOfDay(for: eventStartDate)
+                } else {
+                    timeToUse = eventTime
+                }
+                let startDateString = formatISO8601Date(eventStartDate, timeToUse)
                 let endDateString: String
                 if isMultiDay && eventEndDate > eventStartDate {
-                    endDateString = formatISO8601Date(eventEndDate, eventTime)
+                    // For multi-day all-day events, end date should be end of the end date
+                    let endTimeToUse = isAllDay ? Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: eventEndDate) ?? eventEndDate : timeToUse
+                    endDateString = formatISO8601Date(eventEndDate, endTimeToUse)
                 } else {
-                    // If not multi-day, set ends_at to starts_at + 1 hour
-                    // Create the combined start date/time, then add 1 hour
+                    // If not multi-day, set ends_at appropriately
                     let calendar = Calendar.current
-                    let dateComponents = calendar.dateComponents([.year, .month, .day], from: eventStartDate)
-                    let timeComponents = calendar.dateComponents([.hour, .minute], from: eventTime)
-                    var combinedComponents = DateComponents()
-                    combinedComponents.year = dateComponents.year
-                    combinedComponents.month = dateComponents.month
-                    combinedComponents.day = dateComponents.day
-                    combinedComponents.hour = timeComponents.hour
-                    combinedComponents.minute = timeComponents.minute
-                    if let combinedStartDate = calendar.date(from: combinedComponents) {
-                        let endDate = combinedStartDate.addingTimeInterval(3600) // Add 1 hour
-                        let formatter = ISO8601DateFormatter()
-                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                        endDateString = formatter.string(from: endDate)
+                    if isAllDay {
+                        // For all-day events, end at end of the same day (23:59:59)
+                        if let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: eventStartDate) {
+                            let formatter = ISO8601DateFormatter()
+                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                            endDateString = formatter.string(from: endOfDay)
+                        } else {
+                            // Fallback: add 1 hour
+                            let formatter = ISO8601DateFormatter()
+                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                            if let startDate = formatter.date(from: startDateString) {
+                                let endDate = startDate.addingTimeInterval(3600)
+                                endDateString = formatter.string(from: endDate)
+                            } else {
+                                endDateString = startDateString
+                            }
+                        }
                     } else {
-                        // Fallback: parse start date and add 1 hour
-                        let formatter = ISO8601DateFormatter()
-                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                        if let startDate = formatter.date(from: startDateString) {
-                            let endDate = startDate.addingTimeInterval(3600)
+                        // For timed events, set ends_at to starts_at + 1 hour
+                        let dateComponents = calendar.dateComponents([.year, .month, .day], from: eventStartDate)
+                        let timeComponents = calendar.dateComponents([.hour, .minute], from: eventTime)
+                        var combinedComponents = DateComponents()
+                        combinedComponents.year = dateComponents.year
+                        combinedComponents.month = dateComponents.month
+                        combinedComponents.day = dateComponents.day
+                        combinedComponents.hour = timeComponents.hour
+                        combinedComponents.minute = timeComponents.minute
+                        if let combinedStartDate = calendar.date(from: combinedComponents) {
+                            let endDate = combinedStartDate.addingTimeInterval(3600) // Add 1 hour
+                            let formatter = ISO8601DateFormatter()
+                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                             endDateString = formatter.string(from: endDate)
                         } else {
-                            endDateString = startDateString // Last resort
+                            // Fallback: parse start date and add 1 hour
+                            let formatter = ISO8601DateFormatter()
+                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                            if let startDate = formatter.date(from: startDateString) {
+                                let endDate = startDate.addingTimeInterval(3600)
+                                endDateString = formatter.string(from: endDate)
+                            } else {
+                                endDateString = startDateString // Last resort
+                            }
                         }
                     }
                 }

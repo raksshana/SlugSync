@@ -464,7 +464,6 @@ struct ContentView: View {
             }
         }
     }
-<<<<<<< HEAD
 
     private func getFriendlyErrorMessage(_ error: Error) -> String {
         let errorDescription = error.localizedDescription.lowercased()
@@ -525,8 +524,6 @@ struct ContentView: View {
             return "All events have ended. New events will appear here when they're created."
         }
     }
-
-=======
     
     private func loadFavorites() {
         guard UserService.shared.currentUser != nil else {
@@ -542,6 +539,4 @@ struct ContentView: View {
             }
         }
     }
-    
->>>>>>> 2799bc670f33b392ea9722ab29775472cc899d95
 }

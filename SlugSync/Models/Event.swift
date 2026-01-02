@@ -55,52 +55,136 @@ struct Event: Codable, Identifiable, Hashable {
     var date: String {
         // Format starts_at for display
         let formatter = ISO8601DateFormatter()
-        guard let startDate = formatter.date(from: starts_at) else { 
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var startDate: Date?
+        if let parsed = formatter.date(from: starts_at) {
+            startDate = parsed
+        } else {
             // Fallback to simple string parsing
             let simpleFormatter = DateFormatter()
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-            guard let fallbackDate = simpleFormatter.date(from: starts_at) else { return starts_at }
-            
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
-            return displayFormatter.string(from: fallbackDate)
+            startDate = simpleFormatter.date(from: starts_at)
         }
+        
+        guard let startDate = startDate else { return starts_at }
         
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
         
-        if let endsAt = ends_at, let endDate = formatter.date(from: endsAt) {
-            let startString = displayFormatter.string(from: startDate)
-            let endString = displayFormatter.string(from: endDate)
-            return "\(startString) - \(endString)"
-        } else {
-            return displayFormatter.string(from: startDate)
+        // Check if it's a multi-day event
+        if let endsAt = ends_at {
+            var endDate: Date?
+            if let parsed = formatter.date(from: endsAt) {
+                endDate = parsed
+            } else {
+                let simpleFormatter = DateFormatter()
+                simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                endDate = simpleFormatter.date(from: endsAt)
+            }
+            
+            if let endDate = endDate {
+                let calendar = Calendar.current
+                // Normalize both dates to start of day for comparison
+                let startOfStartDay = calendar.startOfDay(for: startDate)
+                let startOfEndDay = calendar.startOfDay(for: endDate)
+                
+                // Check if start and end are on different days
+                if startOfStartDay != startOfEndDay {
+                    // For display, use the actual dates (not normalized)
+                    let startString = displayFormatter.string(from: startDate)
+                    // For multi-day events, show the end date (not the end datetime)
+                    let endString = displayFormatter.string(from: startOfEndDay)
+                    return "\(startString) - \(endString)"
+                }
+            }
         }
+        
+        return displayFormatter.string(from: startDate)
     }
     var time: String {
         // Format starts_at time for display
         let formatter = ISO8601DateFormatter()
-        guard let startDate = formatter.date(from: starts_at) else { 
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var startDate: Date?
+        if let parsed = formatter.date(from: starts_at) {
+            startDate = parsed
+        } else {
             // Fallback to simple string parsing
             let simpleFormatter = DateFormatter()
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-            guard let fallbackDate = simpleFormatter.date(from: starts_at) else { return "" }
-            
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "h:mm a"
-            return displayFormatter.string(from: fallbackDate)
+            startDate = simpleFormatter.date(from: starts_at)
+        }
+        
+        guard let startDate = startDate else { return "" }
+        
+        let calendar = Calendar.current
+        let startHour = calendar.component(.hour, from: startDate)
+        let startMinute = calendar.component(.minute, from: startDate)
+        
+        // Check if it's an all-day event (starts at or very close to midnight 00:00)
+        // Allow up to 1 minute difference to account for formatting variations
+        let startsAtMidnight = startHour == 0 && startMinute <= 1
+        
+        if startsAtMidnight {
+            // Check the end time to confirm it's all day
+            if let endsAt = ends_at {
+                var endDate: Date?
+                if let parsed = formatter.date(from: endsAt) {
+                    endDate = parsed
+                } else {
+                    let simpleFormatter = DateFormatter()
+                    simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                    endDate = simpleFormatter.date(from: endsAt)
+                }
+                
+                if let endDate = endDate {
+                    let endHour = calendar.component(.hour, from: endDate)
+                    let endMinute = calendar.component(.minute, from: endDate)
+                    
+                    // Check if end is at end of day (23:59) or very close to it
+                    let endsAtEndOfDay = (endHour == 23 && endMinute >= 58) || (endHour == 0 && endMinute <= 1)
+                    
+                    // Check if duration is at least 20 hours (for multi-day all-day events, this will be much longer)
+                    let duration = endDate.timeIntervalSince(startDate)
+                    let isFullDay = duration >= 72000 // 20 hours (allowing for multi-day events)
+                    
+                    if endsAtEndOfDay || isFullDay {
+                        return "All Day"
+                    }
+                } else {
+                    // No end date, but starts at midnight - assume all day
+                    return "All Day"
+                }
+            } else {
+                // Starts at midnight and no end date - assume all day
+                return "All Day"
+            }
         }
         
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "h:mm a"
         
-        if let endsAt = ends_at, let endDate = formatter.date(from: endsAt) {
-            let startTime = displayFormatter.string(from: startDate)
-            let endTime = displayFormatter.string(from: endDate)
-            return "\(startTime) - \(endTime)"
-        } else {
-            return displayFormatter.string(from: startDate)
+        // Show time range if there's an end time
+        if let endsAt = ends_at {
+            var endDate: Date?
+            if let parsed = formatter.date(from: endsAt) {
+                endDate = parsed
+            } else {
+                let simpleFormatter = DateFormatter()
+                simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                endDate = simpleFormatter.date(from: endsAt)
+            }
+            
+            if let endDate = endDate {
+                let startTime = displayFormatter.string(from: startDate)
+                let endTime = displayFormatter.string(from: endDate)
+                return "\(startTime) - \(endTime)"
+            }
         }
+        
+        return displayFormatter.string(from: startDate)
     }
 }
 

@@ -9,6 +9,7 @@ from jose import jwt
 from jose.exceptions import JWTError
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
 from sqlalchemy import text
+from sqlalchemy.pool import NullPool
 from fastapi.security import OAuth2PasswordBearer
 import httpx
 
@@ -24,7 +25,20 @@ if not GOOGLE_CLIENT_ID:
     raise RuntimeError("GOOGLE_CLIENT_ID not found in .env file")
 
 app = FastAPI(title="SlugSync API")
-engine = create_engine(DATABASE_URL, echo=False)
+# Use transaction pooler URI for production (better for concurrent requests)
+# If using a pooler URI, use NullPool to avoid double pooling
+# If using direct connection URI, SQLAlchemy's default pool is fine
+# For Render: use the "Transaction Pooler" URI, not the "Direct Connection" URI
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    # If your DATABASE_URL is a pooler URI (contains "pgbouncer" or similar),
+    # uncomment the next line to use NullPool:
+    # poolclass=NullPool,
+    # Otherwise, SQLAlchemy's default connection pooling will work fine
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_recycle=300,    # Recycle connections after 5 minutes
+)
 
 # --- 2. Security Setup ---
 SECRET_KEY = os.getenv("SECRET_KEY", "lkasdjkjfadskljflpraneethkajf8923983")
