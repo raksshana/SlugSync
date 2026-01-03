@@ -179,27 +179,55 @@ class EventService: ObservableObject {
 
         // Get access token from UserService
         guard let accessToken = UserService.shared.accessToken else {
+            print("❌ No JWT token found for update. User may not be logged in.")
             throw NSError(domain: "EventService", code: 401, userInfo: [NSLocalizedDescriptionKey: "You must be logged in to update events"])
         }
+
+        print("🔄 Updating event \(id)")
+        print("🌐 PATCH URL: \(url)")
 
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let jsonData = try JSONEncoder().encode(event)
+        let encoder = JSONEncoder()
+        let jsonData = try encoder.encode(event)
         request.httpBody = jsonData
+
+        // Debug: Print the JSON being sent
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 JSON being sent for update: \(jsonString)")
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
-            print("❌ Error updating event: \(responseString)")
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ Invalid response type")
             throw NetworkError.invalidResponse
         }
 
+        print("📥 Update response status: \(httpResponse.statusCode)")
+
+        if httpResponse.statusCode != 200 {
+            let responseString = String(data: data, encoding: .utf8) ?? "No response body"
+            print("❌ Error updating event: Status \(httpResponse.statusCode)")
+            print("❌ Response body: \(responseString)")
+
+            // Parse error details if available
+            struct ErrorDetail: Codable {
+                let detail: String?
+            }
+            if let errorDetail = try? JSONDecoder().decode(ErrorDetail.self, from: data),
+               let detail = errorDetail.detail {
+                throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: detail])
+            }
+
+            throw NSError(domain: "EventService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "Error updating event: \(responseString)"])
+        }
+
         let updatedEvent = try JSONDecoder().decode(EventOut.self, from: data)
+        print("✅ Event updated successfully")
         return updatedEvent
     }
     
