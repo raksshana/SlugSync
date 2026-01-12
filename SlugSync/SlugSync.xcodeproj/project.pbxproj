@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		020CA2E32EF4D96E00903058 /* EditEventView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 020CA2E22EF4D96E00903058 /* EditEventView.swift */; };
 		028BA7122E9AE6BE00B8036A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028BA7112E9AE6BE00B8036A /* ContentView.swift */; };
 		028BA71F2E9AE7E200B8036A /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028BA71E2E9AE7E200B8036A /* NetworkManager.swift */; };
 		028BA7222E9AE85400B8036A /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028BA7212E9AE85400B8036A /* Event.swift */; };
@@ -26,6 +27,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		020CA2E22EF4D96E00903058 /* EditEventView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditEventView.swift; sourceTree = "<group>"; };
 		028BA70C2E9AE6BE00B8036A /* SlugSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SlugSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		028BA7112E9AE6BE00B8036A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		028BA71E2E9AE7E200B8036A /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 				029D8A4F2ED55F8A00EC8643 /* SignUpView.swift */,
 				029D8A512ED55FB100EC8643 /* LoginView.swift */,
 				029D8A532ED55FDA00EC8643 /* ProfileView.swift */,
+				020CA2E22EF4D96E00903058 /* EditEventView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -229,6 +232,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				029D8A562ED5603200EC8643 /* UserService.swift in Sources */,
+				020CA2E32EF4D96E00903058 /* EditEventView.swift in Sources */,
 				028BA7222E9AE85400B8036A /* Event.swift in Sources */,
 				029D8A542ED55FDA00EC8643 /* ProfileView.swift in Sources */,
 				028BA71F2E9AE7E200B8036A /* NetworkManager.swift in Sources */,
