@@ -130,13 +130,13 @@ class EventOut(BaseModel):
     owner_id: Optional[int]
 
 class EventUpdate(SQLModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=120)
-    location: Optional[str] = Field(None, min_length=1, max_length=160)
-    starts_at: Optional[datetime] = None
-    ends_at: Optional[datetime] = None
-    description: Optional[str] = Field(None, max_length=10000)
-    host: Optional[str] = Field(None, max_length=300)
-    tags: Optional[str] = Field(None)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    location: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    starts_at: Optional[datetime] = Field(default=None)
+    ends_at: Optional[datetime] = Field(default=None)
+    description: Optional[str] = Field(default=None, max_length=10000)
+    host: Optional[str] = Field(default=None, max_length=300)
+    tags: Optional[str] = Field(default=None)
 
 # --- 5b. Favorite Model ---
 class Favorite(SQLModel, table=True):
