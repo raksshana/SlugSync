@@ -19,6 +19,16 @@ struct EventIn: Codable {
     let tags: String? // Backend expects comma-separated string, not array
 }
 
+struct EventUpdate: Codable {
+    let name: String?
+    let starts_at: String? // ISO 8601 format
+    let ends_at: String? // ISO 8601 format
+    let location: String?
+    let description: String?
+    let host: String?
+    let tags: String?
+}
+
 struct EventOut: Codable, Identifiable {
     let id: Int
     let name: String
@@ -172,7 +182,7 @@ class EventService: ObservableObject {
     }
     
     // MARK: - Update Event
-    func updateEvent(id: Int, event: EventIn) async throws -> EventOut {
+    func updateEvent(id: Int, event: EventUpdate) async throws -> EventOut {
         guard let url = URL(string: "\(baseURL)/events/\(id)") else {
             throw NetworkError.invalidURL
         }

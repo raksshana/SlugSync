@@ -495,7 +495,7 @@ struct EditEventView: View {
                     }
                 }
 
-                let apiEvent = EventIn(
+                let apiEvent = EventUpdate(
                     name: eventName,
                     starts_at: startDateString,
                     ends_at: endDateString,
@@ -506,8 +506,8 @@ struct EditEventView: View {
                 )
 
                 print("📤 Updating event \(event.id):")
-                print("Name: \(apiEvent.name)")
-                print("Starts at: \(apiEvent.starts_at)")
+                print("Name: \(apiEvent.name ?? "nil")")
+                print("Starts at: \(apiEvent.starts_at ?? "nil")")
                 print("Ends at: \(apiEvent.ends_at ?? "nil")")
 
                 let updatedEvent = try await EventService.shared.updateEvent(id: event.id, event: apiEvent)

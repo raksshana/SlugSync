@@ -617,22 +617,32 @@ def update_event(
     current_user: User = Depends(get_current_user)
 ):
     """Update an existing event (requires ownership)"""
+    print(f"🔄 Update request for event {event_id} by user {current_user.email}")
+    print(f"🔄 Update data received: {event_update.model_dump(exclude_unset=True)}")
+
     db_event = session.get(EventModel, event_id)
     if not db_event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    print(f"🔄 Current event in DB - starts_at: {db_event.starts_at}, ends_at: {db_event.ends_at}")
+
     if db_event.owner_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to modify this event"
         )
 
     update_data = event_update.model_dump(exclude_unset=True)
+    print(f"🔄 Fields being updated: {update_data}")
+
     db_event.sqlmodel_update(update_data)
 
     session.add(db_event)
     session.commit()
     session.refresh(db_event)
+
+    print(f"✅ Event updated - new starts_at: {db_event.starts_at}, new ends_at: {db_event.ends_at}")
+
     return EventOut(
         id=db_event.id,
         name=db_event.name,
