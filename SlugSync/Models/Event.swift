@@ -54,6 +54,9 @@ struct Event: Codable, Identifiable, Hashable {
     }
     var date: String {
         // Format starts_at for display
+        let localTimeZone = TimeZone.current
+        print("🌍 Local timezone detected: \(localTimeZone.identifier) (offset: \(localTimeZone.secondsFromGMT() / 3600) hours)")
+        
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
@@ -64,6 +67,7 @@ struct Event: Codable, Identifiable, Hashable {
             // Fallback to simple string parsing
             let simpleFormatter = DateFormatter()
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+            simpleFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
             startDate = simpleFormatter.date(from: starts_at)
         }
 
@@ -71,6 +75,7 @@ struct Event: Codable, Identifiable, Hashable {
 
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "EEEE, MMM dd, yyyy"
+        displayFormatter.timeZone = localTimeZone // Convert UTC dates to local timezone
 
         // Always just show the start date for single-day events
         // Only show date range for multi-day events
@@ -81,6 +86,7 @@ struct Event: Codable, Identifiable, Hashable {
             } else {
                 let simpleFormatter = DateFormatter()
                 simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                simpleFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
                 endDate = simpleFormatter.date(from: endsAt)
             }
 
@@ -115,6 +121,7 @@ struct Event: Codable, Identifiable, Hashable {
     }
     var time: String {
         // Format starts_at time for display
+        let localTimeZone = TimeZone.current
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         
@@ -125,14 +132,23 @@ struct Event: Codable, Identifiable, Hashable {
             // Fallback to simple string parsing
             let simpleFormatter = DateFormatter()
             simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+            simpleFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
             startDate = simpleFormatter.date(from: starts_at)
         }
         
         guard let startDate = startDate else { return "" }
         
+        // Debug logging
+        print("🕐 Time formatting - UTC date: \(startDate)")
+        print("🕐 Local timezone: \(localTimeZone.identifier)")
+        
+        // Extract time components in local timezone explicitly
         let calendar = Calendar.current
-        let startHour = calendar.component(.hour, from: startDate)
-        let startMinute = calendar.component(.minute, from: startDate)
+        let timeComponents = calendar.dateComponents(in: localTimeZone, from: startDate)
+        let startHour = timeComponents.hour ?? 0
+        let startMinute = timeComponents.minute ?? 0
+        
+        print("🕐 Extracted local time components: hour=\(startHour), minute=\(startMinute)")
         
         // Check if it's an all-day event (starts at or very close to midnight 00:00)
         // Allow up to 1 minute difference to account for formatting variations
@@ -150,9 +166,12 @@ struct Event: Codable, Identifiable, Hashable {
                     endDate = simpleFormatter.date(from: endsAt)
                 }
                 
-                if let endDate = endDate {
-                    let endHour = calendar.component(.hour, from: endDate)
-                    let endMinute = calendar.component(.minute, from: endDate)
+            if let endDate = endDate {
+                let endTimeComponents = calendar.dateComponents(in: localTimeZone, from: endDate)
+                let endHour = endTimeComponents.hour ?? 0
+                let endMinute = endTimeComponents.minute ?? 0
+                
+                print("🕐 End time components: hour=\(endHour), minute=\(endMinute)")
                     
                     // Check if end is at end of day (23:59) or very close to it
                     let endsAtEndOfDay = (endHour == 23 && endMinute >= 58) || (endHour == 0 && endMinute <= 1)
@@ -174,8 +193,15 @@ struct Event: Codable, Identifiable, Hashable {
             }
         }
         
+        // Date objects from ISO8601 are in UTC, but Date objects themselves are timezone-agnostic
+        // When we format with a DateFormatter set to local timezone, it converts correctly
         let displayFormatter = DateFormatter()
         displayFormatter.dateFormat = "h:mm a"
+        displayFormatter.timeZone = localTimeZone // This ensures UTC dates are converted to local time
+        displayFormatter.locale = Locale.current // Ensure proper AM/PM formatting
+        
+        print("🕐 DateFormatter timezone: \(displayFormatter.timeZone?.identifier ?? "nil")")
+        print("🕐 DateFormatter locale: \(displayFormatter.locale.identifier)")
         
         // Show time range if there's an end time
         if let endsAt = ends_at {
@@ -185,17 +211,25 @@ struct Event: Codable, Identifiable, Hashable {
             } else {
                 let simpleFormatter = DateFormatter()
                 simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                simpleFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
                 endDate = simpleFormatter.date(from: endsAt)
             }
             
             if let endDate = endDate {
+                print("🕐 End UTC date: \(endDate)")
+                // Format both dates - the DateFormatter will convert from UTC (stored) to local (displayed)
                 let startTime = displayFormatter.string(from: startDate)
                 let endTime = displayFormatter.string(from: endDate)
+                print("🕐 Formatted time range: \(startTime) - \(endTime)")
+                print("🕐 Expected: hour=\(startHour), minute=\(startMinute) should show as \(startHour > 12 ? "\(startHour - 12):\(String(format: "%02d", startMinute)) PM" : "\(startHour):\(String(format: "%02d", startMinute)) \(startHour == 0 ? "AM" : startHour < 12 ? "AM" : "PM")")")
                 return "\(startTime) - \(endTime)"
             }
         }
         
-        return displayFormatter.string(from: startDate)
+        let result = displayFormatter.string(from: startDate)
+        print("🕐 Formatted single time: \(result)")
+        print("🕐 Expected: hour=\(startHour), minute=\(startMinute) should show as \(startHour > 12 ? "\(startHour - 12):\(String(format: "%02d", startMinute)) PM" : "\(startHour):\(String(format: "%02d", startMinute)) \(startHour == 0 ? "AM" : startHour < 12 ? "AM" : "PM")")")
+        return result
     }
 }
 

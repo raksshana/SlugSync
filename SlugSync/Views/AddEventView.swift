@@ -17,7 +17,6 @@ struct AddEventView: View {
     @State private var eventEndTime: Date = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
     @State private var location: String = ""
     @State private var selectedCategory: String = "Academic"
-    @State private var isAllDay: Bool = false
     @State private var isMultiDay: Bool = false
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
@@ -206,45 +205,33 @@ struct AddEventView: View {
                             }
                         }
                         
-                        // All Day Toggle
-                        HStack {
-                            Text("All Day Event")
+                        // Time Selection
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Time")
                                 .font(.headline)
+                                .fontWeight(.bold)
                                 .foregroundColor(.white)
-                            Spacer()
-                            Toggle("", isOn: $isAllDay)
-                                .tint(Color(red: 0.0, green: 0.2, blue: 0.4)) // Dark blue when on
-                        }
-                        
-                        // Time Selection (only if not all day)
-                        if !isAllDay {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Time")
+                            
+                            HStack {
+                                Text("Start Time")
                                     .font(.headline)
-                                    .fontWeight(.bold)
                                     .foregroundColor(.white)
-                                
-                                HStack {
-                                    Text("Start Time")
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    DatePicker("", selection: $eventStartTime, displayedComponents: .hourAndMinute)
-                                        .datePickerStyle(CompactDatePickerStyle())
-                                        .colorScheme(.dark)
-                                        .accentColor(.white)
-                                }
-                                
-                                HStack {
-                                    Text("End Time")
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    DatePicker("", selection: $eventEndTime, displayedComponents: .hourAndMinute)
-                                        .datePickerStyle(CompactDatePickerStyle())
-                                        .colorScheme(.dark)
-                                        .accentColor(.white)
-                                }
+                                Spacer()
+                                DatePicker("", selection: $eventStartTime, displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
+                            }
+                            
+                            HStack {
+                                Text("End Time")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Spacer()
+                                DatePicker("", selection: $eventEndTime, displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(CompactDatePickerStyle())
+                                    .colorScheme(.dark)
+                                    .accentColor(.white)
                             }
                         }
                         
@@ -321,26 +308,24 @@ struct AddEventView: View {
             return
         }
         
-        // Validate times for non-all-day events
-        if !isAllDay {
-            let calendar = Calendar.current
-            let startComponents = calendar.dateComponents([.hour, .minute], from: eventStartTime)
-            let endComponents = calendar.dateComponents([.hour, .minute], from: eventEndTime)
-            
-            // Compare times (hours and minutes)
-            let startMinutes = (startComponents.hour ?? 0) * 60 + (startComponents.minute ?? 0)
-            let endMinutes = (endComponents.hour ?? 0) * 60 + (endComponents.minute ?? 0)
-            
-            if isMultiDay {
-                // For multi-day events, just check that times are valid (end time can be before start time if on different days)
-                // No validation needed here
-            } else {
-                // For single-day events, end time must be after start time
-                if endMinutes <= startMinutes {
-                    errorMessage = "End time must be after start time"
-                    showError = true
-                    return
-                }
+        // Validate times
+        let calendar = Calendar.current
+        let startComponents = calendar.dateComponents([.hour, .minute], from: eventStartTime)
+        let endComponents = calendar.dateComponents([.hour, .minute], from: eventEndTime)
+        
+        // Compare times (hours and minutes)
+        let startMinutes = (startComponents.hour ?? 0) * 60 + (startComponents.minute ?? 0)
+        let endMinutes = (endComponents.hour ?? 0) * 60 + (endComponents.minute ?? 0)
+        
+        if isMultiDay {
+            // For multi-day events, just check that times are valid (end time can be before start time if on different days)
+            // No validation needed here
+        } else {
+            // For single-day events, end time must be after start time
+            if endMinutes <= startMinutes {
+                errorMessage = "End time must be after start time"
+                showError = true
+                return
             }
         }
 
@@ -372,74 +357,19 @@ struct AddEventView: View {
                 // Convert tags array to comma-separated string for backend
                 let tagsString = selectedCategory.lowercased()
                 
-                // Always include ends_at
+                // Always include ends_at - use the selected start and end times
                 let calendar = Calendar.current
                 let startDateString: String
                 let endDateString: String
 
-                if isAllDay {
-                    // For all-day events, set time to midnight (00:00)
-                    var startComponents = calendar.dateComponents([.year, .month, .day], from: eventStartDate)
-                    startComponents.hour = 0
-                    startComponents.minute = 0
-                    startComponents.second = 0
+                startDateString = formatISO8601Date(eventStartDate, eventStartTime)
 
-                    if isMultiDay {
-                        // Multi-day all-day event: start at midnight, end at 23:59 of end date
-                        if let startDate = calendar.date(from: startComponents) {
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            startDateString = formatter.string(from: startDate)
-                        } else {
-                            startDateString = formatISO8601Date(eventStartDate, Date())
-                        }
-
-                        var endComponents = calendar.dateComponents([.year, .month, .day], from: eventEndDate)
-                        endComponents.hour = 23
-                        endComponents.minute = 59
-                        endComponents.second = 59
-
-                        if let endDate = calendar.date(from: endComponents) {
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            endDateString = formatter.string(from: endDate)
-                        } else {
-                            endDateString = formatISO8601Date(eventEndDate, Date())
-                        }
-                    } else {
-                        // Single-day all-day event: start at midnight, end at 23:59 same day
-                        if let startDate = calendar.date(from: startComponents) {
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            startDateString = formatter.string(from: startDate)
-
-                            // End at 23:59 of the same day
-                            var endComponents = startComponents
-                            endComponents.hour = 23
-                            endComponents.minute = 59
-                            endComponents.second = 59
-
-                            if let endDate = calendar.date(from: endComponents) {
-                                endDateString = formatter.string(from: endDate)
-                            } else {
-                                endDateString = startDateString
-                            }
-                        } else {
-                            startDateString = formatISO8601Date(eventStartDate, Date())
-                            endDateString = startDateString
-                        }
-                    }
+                if isMultiDay {
+                    // Multi-day timed event: use start time on start date, end time on end date
+                    endDateString = formatISO8601Date(eventEndDate, eventEndTime)
                 } else {
-                    // Non-all-day events: use the selected start and end times
-                    startDateString = formatISO8601Date(eventStartDate, eventStartTime)
-
-                    if isMultiDay {
-                        // Multi-day timed event: use start time on start date, end time on end date
-                        endDateString = formatISO8601Date(eventEndDate, eventEndTime)
-                    } else {
-                        // Single-day timed event: use start time on start date, end time on same date
-                        endDateString = formatISO8601Date(eventStartDate, eventEndTime)
-                    }
+                    // Single-day timed event: use start time on start date, end time on same date
+                    endDateString = formatISO8601Date(eventStartDate, eventEndTime)
                 }
                 
                 let apiEvent = EventIn(
@@ -477,7 +407,6 @@ struct AddEventView: View {
                     location = ""
                     selectedCategory = "Academic"
                     isMultiDay = false
-                    isAllDay = false
                     eventStartDate = Date()
                     eventEndDate = Date()
                     eventStartTime = Date()
@@ -522,21 +451,38 @@ struct AddEventView: View {
     
     private func formatISO8601Date(_ date: Date, _ time: Date) -> String {
         let calendar = Calendar.current
-        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        let localTimeZone = TimeZone.current
         
-        var combinedComponents = DateComponents()
-        combinedComponents.year = dateComponents.year
-        combinedComponents.month = dateComponents.month
-        combinedComponents.day = dateComponents.day
-        combinedComponents.hour = timeComponents.hour
-        combinedComponents.minute = timeComponents.minute
+        // Get start of day for the selected date (in local timezone)
+        let startOfDay = calendar.startOfDay(for: date)
         
-        let combinedDate = calendar.date(from: combinedComponents) ?? date
+        // Extract time components from the time picker Date
+        // The time picker Date represents a moment in time, we need to get its hour/minute in local timezone
+        let timeComponents = calendar.dateComponents(in: localTimeZone, from: time)
+        guard let hours = timeComponents.hour, let minutes = timeComponents.minute else {
+            // Fallback if extraction fails
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return formatter.string(from: date)
+        }
         
+        // Create the combined date/time by adding the time interval to start of day
+        // This ensures we're working entirely in local timezone
+        let timeInterval = Double(hours) * 3600.0 + Double(minutes) * 60.0
+        let combinedDate = startOfDay.addingTimeInterval(timeInterval)
+        
+        // ISO8601DateFormatter always outputs in UTC
+        // The combinedDate is in local time (PST), formatter converts to UTC for backend storage
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: combinedDate)
+        let utcString = formatter.string(from: combinedDate)
+        
+        print("🕐 formatISO8601Date - Input: date=\(date), time=\(time)")
+        print("🕐 Extracted: hours=\(hours), minutes=\(minutes)")
+        print("🕐 Combined local date: \(combinedDate)")
+        print("🕐 UTC string: \(utcString)")
+        
+        return utcString
     }
     
     private func formatEventDate() -> String {
@@ -553,15 +499,11 @@ struct AddEventView: View {
     }
     
     private func formatEventTime() -> String {
-        if isAllDay {
-            return "All Day"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            let startTime = formatter.string(from: eventStartTime)
-            let endTime = formatter.string(from: eventEndTime)
-            return "\(startTime) - \(endTime)"
-        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let startTime = formatter.string(from: eventStartTime)
+        let endTime = formatter.string(from: eventEndTime)
+        return "\(startTime) - \(endTime)"
     }
     
     private func getImageForCategory(_ category: String) -> String {
