@@ -19,6 +19,14 @@ struct EventCardView: View {
         eventService.favoriteIds.contains(event.id)
     }
     
+    // Check if current user owns this event
+    private var isOwner: Bool {
+        guard let currentUser = userService.currentUser else {
+            return false
+        }
+        return event.owner_id == currentUser.id
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image with category tag and favorite button
@@ -123,16 +131,18 @@ struct EventCardView: View {
                 
                 // Bottom buttons
                 HStack {
-                    // Delete button (left side)
-                    Button(action: {
-                        deleteEvent()
-                    }) {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(6)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(15)
+                    // Delete button (left side) - only show if user is logged in and owns the event
+                    if userService.currentUser != nil && isOwner {
+                        Button(action: {
+                            deleteEvent()
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(6)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(15)
+                        }
                     }
                     
                     Spacer()
