@@ -519,6 +519,10 @@ struct ContentView: View {
             formatter.dateStyle = .medium
             return "No events found between \(formatter.string(from: filterStartDate)) and \(formatter.string(from: filterEndDate))."
         } else if events.isEmpty {
+            // If user is not signed in, don't show "Be the first to create an event!"
+            if UserService.shared.currentUser == nil {
+                return "Check back soon for upcoming activities."
+            }
             return "Be the first to create an event! Check back soon for upcoming activities."
         } else {
             return "All events have ended. New events will appear here when they're created."

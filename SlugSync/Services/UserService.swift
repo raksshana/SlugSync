@@ -16,7 +16,7 @@ struct UserCreate: Codable {
     let password: String
 }
 
-struct UserOut: Codable, Identifiable {
+struct UserOut: Codable, Identifiable, Equatable {
     let id: Int
     let email: String
     let name: String

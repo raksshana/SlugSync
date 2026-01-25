@@ -95,23 +95,24 @@ struct FavoritesView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 15)
                 
-                if favoriteEvents.isEmpty {
+                if filteredFavorites.isEmpty {
                     // Empty state
                     VStack(spacing: 20) {
+                        Spacer()
                         Image(systemName: "bookmark")
                             .font(.system(size: 60))
-                            .foregroundColor(.white)
-                        Text("Nothing Saved Yet")
+                            .foregroundColor(.white.opacity(0.6))
+                        Text(userService.currentUser == nil ? "Sign In To Save Events" : "Start Saving Events")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        Text("Tap the bookmark icon on events to save them")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.9))
+                        Text(userService.currentUser == nil ? "Log in to bookmark events you're interested in" : "Tap the bookmark icon on events to save them")
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal)
+                            .padding(.horizontal, 40)
+                        Spacer()
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // Favorites list
                     ScrollView {

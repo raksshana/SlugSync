@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @StateObject private var userService = UserService.shared
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -26,13 +27,22 @@ struct MainTabView: View {
                 }
                 .tag(1)
             
-            AddEventView()
-                .tabItem {
-                    Image(systemName: selectedTab == 2 ? "plus.circle.fill" : "plus.circle")
-                    Text("Add Event")
-                }
-                .tag(2)
+            // Only show Add Event tab if user is signed in
+            if userService.currentUser != nil {
+                AddEventView()
+                    .tabItem {
+                        Image(systemName: selectedTab == 2 ? "plus.circle.fill" : "plus.circle")
+                        Text("Add Event")
+                    }
+                    .tag(2)
+            }
         }
         .accentColor(.blue)
+        .onChange(of: userService.currentUser) { newUser in
+            // If user logs out while on Add Event tab, switch to Home tab
+            if newUser == nil && selectedTab == 2 {
+                selectedTab = 0
+            }
+        }
     }
 }

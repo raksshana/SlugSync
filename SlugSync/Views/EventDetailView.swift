@@ -11,7 +11,10 @@ struct EventDetailView: View {
     let event: Event
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject private var eventService = EventService.shared
+    @StateObject private var userService = UserService.shared
     @State private var showEditSheet: Bool = false
+    @State private var showLoginAlert: Bool = false
+    @State private var showLoginView: Bool = false
 
     // Check if current user owns this event
     private var isOwner: Bool {
@@ -230,10 +233,27 @@ struct EventDetailView: View {
             .sheet(isPresented: $showEditSheet) {
                 EditEventView(event: event)
             }
+            .alert("Sign In Required", isPresented: $showLoginAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign In") {
+                    showLoginView = true
+                }
+            } message: {
+                Text("You need to sign in to save events. Sign in to continue.")
+            }
+            .sheet(isPresented: $showLoginView) {
+                LoginView()
+            }
         }
     }
     
     private func toggleFavorite() {
+        // Check if user is logged in
+        guard userService.currentUser != nil else {
+            showLoginAlert = true
+            return
+        }
+        
         Task {
             do {
                 if isFavorite {
