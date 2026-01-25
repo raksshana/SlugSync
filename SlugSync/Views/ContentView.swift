@@ -51,7 +51,14 @@ struct ContentView: View {
         // Apply date range filter if active
         let dateFiltered: [Event]
         if isDateFilterActive {
-            print("📅 Date filter active: \(filterStartDate) to \(filterEndDate)")
+            let localTimeZone = TimeZone.current
+            let startComponents = calendar.dateComponents([.year, .month, .day], from: filterStartDate)
+            let endComponents = calendar.dateComponents([.year, .month, .day], from: filterEndDate)
+            print("📅 Date filter active:")
+            print("   Filter start (raw): \(filterStartDate)")
+            print("   Filter end (raw): \(filterEndDate)")
+            print("   Filter start (local): \(startComponents.year ?? 0)-\(String(format: "%02d", startComponents.month ?? 0))-\(String(format: "%02d", startComponents.day ?? 0))")
+            print("   Filter end (local): \(endComponents.year ?? 0)-\(String(format: "%02d", endComponents.month ?? 0))-\(String(format: "%02d", endComponents.day ?? 0))")
             dateFiltered = futureEvents.filter { event in
                 // Try to parse the event date
                 var eventDate: Date?
@@ -63,6 +70,7 @@ struct ContentView: View {
                 if eventDate == nil {
                     let simpleFormatter = DateFormatter()
                     simpleFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                    simpleFormatter.timeZone = TimeZone(secondsFromGMT: 0) // UTC
                     eventDate = simpleFormatter.date(from: event.starts_at)
                 }
 
@@ -71,18 +79,54 @@ struct ContentView: View {
                     return false  // Don't include events with unparseable dates
                 }
 
-                // Normalize dates to start of day for comparison
-                let eventStartOfDay = calendar.startOfDay(for: parsedDate)
-                let filterStartOfDay = calendar.startOfDay(for: filterStartDate)
-                let filterEndOfDay = calendar.startOfDay(for: filterEndDate)
-
+                // Debug: Log the raw date string and parsed date
+                print("🔍 Event '\(event.name)':")
+                print("   Raw date string: \(event.starts_at)")
+                print("   Parsed UTC date: \(parsedDate)")
+                
+                // Get calendar day components in local timezone for accurate date comparison
+                // Use the same approach as Event.date property - format to local timezone first
+                let localTimeZone = TimeZone.current
+                let localDateFormatter = DateFormatter()
+                localDateFormatter.timeZone = localTimeZone
+                localDateFormatter.dateFormat = "yyyy-MM-dd"
+                
+                // Format the UTC date to local timezone string, then parse it back to get local date
+                let localDateString = localDateFormatter.string(from: parsedDate)
+                let localDate = localDateFormatter.date(from: localDateString) ?? parsedDate
+                
+                let eventComponents = calendar.dateComponents([.year, .month, .day], from: localDate)
+                print("   Local date string: \(localDateString)")
+                print("   Local date components: year=\(eventComponents.year ?? 0), month=\(eventComponents.month ?? 0), day=\(eventComponents.day ?? 0)")
+                let filterStartComponents = calendar.dateComponents([.year, .month, .day], from: filterStartDate)
+                let filterEndComponents = calendar.dateComponents([.year, .month, .day], from: filterEndDate)
+                
+                guard let eventYear = eventComponents.year,
+                      let eventMonth = eventComponents.month,
+                      let eventDay = eventComponents.day,
+                      let filterStartYear = filterStartComponents.year,
+                      let filterStartMonth = filterStartComponents.month,
+                      let filterStartDay = filterStartComponents.day,
+                      let filterEndYear = filterEndComponents.year,
+                      let filterEndMonth = filterEndComponents.month,
+                      let filterEndDay = filterEndComponents.day else {
+                    print("⚠️ Failed to extract date components")
+                    return false
+                }
+                
+                // Compare date components directly to avoid timezone conversion issues
+                // Build comparable date values: YYYYMMDD as integers
+                let eventDateValue = eventYear * 10000 + eventMonth * 100 + eventDay
+                let filterStartValue = filterStartYear * 10000 + filterStartMonth * 100 + filterStartDay
+                let filterEndValue = filterEndYear * 10000 + filterEndMonth * 100 + filterEndDay
+                
                 // Event is in range if its date is >= start date and <= end date
-                let isInRange = eventStartOfDay >= filterStartOfDay && eventStartOfDay <= filterEndOfDay
+                let isInRange = eventDateValue >= filterStartValue && eventDateValue <= filterEndValue
 
                 if !isInRange {
-                    print("🚫 Event '\(event.name)' filtered out - event date: \(eventStartOfDay), range: \(filterStartOfDay) to \(filterEndOfDay)")
+                    print("🚫 Event '\(event.name)' filtered out - event date: \(eventYear)-\(String(format: "%02d", eventMonth))-\(String(format: "%02d", eventDay)), range: \(filterStartYear)-\(String(format: "%02d", filterStartMonth))-\(String(format: "%02d", filterStartDay)) to \(filterEndYear)-\(String(format: "%02d", filterEndMonth))-\(String(format: "%02d", filterEndDay))")
                 } else {
-                    print("✅ Event '\(event.name)' included - event date: \(eventStartOfDay), range: \(filterStartOfDay) to \(filterEndOfDay)")
+                    print("✅ Event '\(event.name)' included - event date: \(eventYear)-\(String(format: "%02d", eventMonth))-\(String(format: "%02d", eventDay)), range: \(filterStartYear)-\(String(format: "%02d", filterStartMonth))-\(String(format: "%02d", filterStartDay)) to \(filterEndYear)-\(String(format: "%02d", filterEndMonth))-\(String(format: "%02d", filterEndDay))")
                 }
 
                 return isInRange
